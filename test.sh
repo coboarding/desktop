@@ -57,7 +57,18 @@ function validateYamlFiles(dir) {
     } else if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
       try {
         const content = fs.readFileSync(fullPath, 'utf8');
-        jsYaml.load(content);
+        
+        // Obsługa wielu dokumentów w jednym pliku (rozdzielonych ---)
+        const documents = content.split(/^---$/m);
+        
+        // Jeśli mamy tylko jeden dokument (bez separatorów ---)
+        if (documents.length === 1) {
+          jsYaml.load(content);
+        } else {
+          // Walidacja wszystkich dokumentów w pliku
+          jsYaml.loadAll(content, function() {});
+        }
+        
         console.log(`✓ ${fullPath} - OK`);
       } catch (error) {
         console.error(`✗ ${fullPath} - BŁĄD: ${error.message}`);
