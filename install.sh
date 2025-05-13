@@ -34,43 +34,53 @@ log "Tworzenie katalogów dla modeli..."
 mkdir -p "$APP_DIR/models/"{llm,tts,stt}
 
 # Pobieranie małego modelu LLM (TinyLlama-1.1B ONNX)
-log "Pobieranie modelu TinyLlama 1.1B ONNX..."
-TINYLLAMA_URL="https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-ONNX/resolve/main/model_quantized.onnx"
-wget -q --show-progress -O "$APP_DIR/models/llm/model.onnx" $TINYLLAMA_URL || {
-  log "Nieudane pobieranie modelu TinyLlama. Próba alternatywnego źródła..."
-  # Alternatywne źródło - mały model GGML
-  GGML_URL="https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b-chat-v1.0.ggmlv3.q4_0.bin"
-  wget -q --show-progress -O "$APP_DIR/models/llm/model.onnx" $GGML_URL || {
-    log "UWAGA: Pobieranie modelu zakończone niepowodzeniem. Tworzenie minimalnego pliku modelu..."
-    # Tworzenie minimalnego pliku zaślepki w przypadku nieudanego pobierania
-    echo '{"model_type":"tiny_llm","version":"1.0","min_compat":"0.1"}' > "$APP_DIR/models/llm/model.onnx"
+if [ ! -f "$APP_DIR/models/llm/model.onnx" ]; then
+  log "Pobieranie modelu TinyLlama 1.1B ONNX..."
+  TINYLLAMA_URL="https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-ONNX/resolve/main/model_quantized.onnx"
+  wget -q --show-progress -O "$APP_DIR/models/llm/model.onnx" $TINYLLAMA_URL || {
+    log "Nieudane pobieranie modelu TinyLlama. Próba alternatywnego źródła..."
+    GGML_URL="https://huggingface.co/ggml-org/models/resolve/main/tinyllama-1.1b-chat-v1.0.ggmlv3.q4_0.bin"
+    wget -q --show-progress -O "$APP_DIR/models/llm/model.onnx" $GGML_URL || {
+      log "UWAGA: Pobieranie modelu zakończone niepowodzeniem. Tworzenie minimalnego pliku modelu..."
+      echo '{"model_type":"tiny_llm","version":"1.0","min_compat":"0.1"}' > "$APP_DIR/models/llm/model.onnx"
+    }
   }
-}
+else
+  log "Model LLM już istnieje, pomijam pobieranie."
+fi
 
 # Pobieranie małego modelu TTS
-log "Pobieranie lekkiego modelu TTS (Piper)..."
-PIPER_URL="https://github.com/rhasspy/piper/releases/download/v0.0.2/voice-en-us-lessac-low.tar.gz"
-wget -q --show-progress -O /tmp/tts_model.tar.gz $PIPER_URL || {
-  log "UWAGA: Pobieranie modelu TTS zakończone niepowodzeniem. Tworzenie minimalnego pliku modelu..."
-  echo '{"model_type":"piper_tts","version":"1.0","language":"pl"}' > "$APP_DIR/models/tts/model.bin"
-}
-
-# Rozpakowywanie modelu TTS jeśli pobrany
-if [ -f /tmp/tts_model.tar.gz ]; then
-  tar -xzf /tmp/tts_model.tar.gz -C "$APP_DIR/models/tts/" || {
-    log "Błąd rozpakowywania modelu TTS. Tworzenie minimalnego pliku modelu..."
+if [ ! -f "$APP_DIR/models/tts/model.bin" ]; then
+  log "Pobieranie lekkiego modelu TTS (Piper)..."
+  PIPER_URL="https://github.com/rhasspy/piper/releases/download/v0.0.2/voice-en-us-lessac-low.tar.gz"
+  wget -q --show-progress -O /tmp/tts_model.tar.gz $PIPER_URL || {
+    log "UWAGA: Pobieranie modelu TTS zakończone niepowodzeniem. Tworzenie minimalnego pliku modelu..."
     echo '{"model_type":"piper_tts","version":"1.0","language":"pl"}' > "$APP_DIR/models/tts/model.bin"
   }
-  rm /tmp/tts_model.tar.gz
+
+  # Rozpakowywanie modelu TTS jeśli pobrany
+  if [ -f /tmp/tts_model.tar.gz ]; then
+    tar -xzf /tmp/tts_model.tar.gz -C "$APP_DIR/models/tts/" || {
+      log "Błąd rozpakowywania modelu TTS. Tworzenie minimalnego pliku modelu..."
+      echo '{"model_type":"piper_tts","version":"1.0","language":"pl"}' > "$APP_DIR/models/tts/model.bin"
+    }
+    rm /tmp/tts_model.tar.gz
+  fi
+else
+  log "Model TTS już istnieje, pomijam pobieranie."
 fi
 
 # Pobieranie małego modelu STT (Whisper Tiny)
-log "Pobieranie lekkiego modelu STT (Whisper Tiny)..."
-WHISPER_URL="https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"
-wget -q --show-progress -O "$APP_DIR/models/stt/model.bin" $WHISPER_URL || {
-  log "UWAGA: Pobieranie modelu STT zakończone niepowodzeniem. Tworzenie minimalnego pliku modelu..."
-  echo '{"model_type":"whisper_tiny","version":"1.0","language":"pl"}' > "$APP_DIR/models/stt/model.bin"
-}
+if [ ! -f "$APP_DIR/models/stt/model.bin" ]; then
+  log "Pobieranie lekkiego modelu STT (Whisper Tiny)..."
+  WHISPER_URL="https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"
+  wget -q --show-progress -O "$APP_DIR/models/stt/model.bin" $WHISPER_URL || {
+    log "UWAGA: Pobieranie modelu STT zakończone niepowodzeniem. Tworzenie minimalnego pliku modelu..."
+    echo '{"model_type":"whisper_tiny","version":"1.0","language":"pl"}' > "$APP_DIR/models/stt/model.bin"
+  }
+else
+  log "Model STT już istnieje, pomijam pobieranie."
+fi
 
 # Przygotowanie katalogu vendor
 log "Przygotowanie katalogu vendor..."

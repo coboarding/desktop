@@ -22,15 +22,15 @@ log "Sprawdzanie zależności..."
 check_dependency node
 check_dependency npm
 
+# Ścieżki
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="$SCRIPT_DIR"
+
 # Instalacja electron-builder lokalnie, jeśli nie ma node_modules/.bin/electron-builder
 if [ ! -f "$APP_DIR/node_modules/.bin/electron-builder" ]; then
   log "Instalowanie electron-builder lokalnie..."
   npm install --save-dev electron-builder
 fi
-
-# Ścieżki
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APP_DIR="$SCRIPT_DIR"
 
 # Czyszczenie katalogu dist
 log "Czyszczenie katalogu dist..."
