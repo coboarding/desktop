@@ -28,15 +28,21 @@ const ANIMATION_TYPES = {
 
 class NoVNCServer {
   constructor(options = {}) {
-    this.port = options.port || 6080;
+    this.port = options.port || CONFIG.DEFAULT_PORT;
     this.httpServer = null;
     this.webSocketServer = null;
     this.asciiProcess = null;
     this.appPath = app.getAppPath();
     this.novncPath = path.join(this.appPath, 'vendor/novnc');
     this.clients = new Set();
-    this.currentAnimation = 'idle';
+    this.currentAnimation = ANIMATION_TYPES.IDLE;
     this.isRunning = false;
+    
+    // Opcje konfiguracyjne
+    this.config = {
+      frameRate: options.frameRate || CONFIG.FRAME_RATE,
+      maxPortAttempts: options.maxPortAttempts || CONFIG.MAX_PORT_ATTEMPTS
+    };
   }
 
   // Funkcja do znajdowania dostępnego portu
