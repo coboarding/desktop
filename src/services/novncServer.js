@@ -46,41 +46,9 @@ class NoVNCServer {
   }
 
   // Funkcja do znajdowania dostępnego portu
-  findAvailablePort(startPort, maxAttempts = 10) {
-    return new Promise((resolve, reject) => {
-      let currentPort = startPort;
-      let attempts = 0;
-      
-      const tryPort = (port) => {
-        const testServer = http.createServer();
-        
-        testServer.once('error', (err) => {
-          if (err.code === 'EADDRINUSE') {
-            log.warn(`Port ${port} jest już zajęty, próbuję następny...`);
-            testServer.close();
-            
-            // Spróbuj następny port
-            if (attempts < maxAttempts) {
-              attempts++;
-              tryPort(port + 1);
-            } else {
-              reject(new Error(`Nie można znaleźć dostępnego portu po ${maxAttempts} próbach`));
-            }
-          } else {
-            reject(err);
-          }
-        });
-        
-        testServer.once('listening', () => {
-          testServer.close();
-          resolve(port);
-        });
-        
-        testServer.listen(port);
-      };
-      
-      tryPort(currentPort);
-    });
+  async findAvailablePort(startPort, maxAttempts = 10) {
+    const networkUtils = require('./novnc/networkUtils');
+    return networkUtils.findAvailablePort(startPort, maxAttempts);
   }
 
   async initialize() {

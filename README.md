@@ -14,6 +14,7 @@ desktop
 - [Kontakt i wsparcie](#kontakt-i-wsparcie)
 - [Prezentacja rozwiązania](./docs/presentation.md)
 - [Szczegółowa dokumentacja](#szczegółowa-dokumentacja)
+- [Konfiguracja RTSP Video](#konfiguracja-rtsp-video)
 
 ## Wprowadzenie
 
@@ -162,6 +163,16 @@ Panel ustawień pozwala na konfigurację:
 - Urządzeń audio (mikrofon, głośniki)
 - Modeli AI (LLM, TTS)
 - Infrastruktury (K3s, Terraform)
+
+## Konfiguracja RTSP Video
+
+Aplikacja umożliwia dodanie własnego źródła obrazu wideo poprzez protokół RTSP (np. kamera IP, rejestrator, streaming). Konfigurację można wykonać na dwa sposoby:
+
+1. **Przez rozmowę w czacie VideoChat** – wystarczy napisać np. "Chcę dodać kamerę RTSP" lub podać adres streamu. Asystent poprosi kolejno o adres RTSP, login i hasło (jeśli wymagane), a następnie zapisze konfigurację.
+
+2. **Przez zakładkę Ustawienia** – w sekcji "Ustawienia RTSP Video" można wpisać adres, login i hasło do streamu oraz zapisać konfigurację ręcznie.
+
+Konfiguracja jest wykorzystywana do opisu obrazu wideo oraz dalszej integracji z asystentem.
 
 ## Budowanie pakietów
 

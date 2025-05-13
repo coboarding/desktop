@@ -6,6 +6,7 @@
 - [Jak zacząć?](#4-jak-zacząć)
 - [Podsumowanie](#5-podsumowanie)
 - [Kontakt i dokumentacja](#6-kontakt-i-dokumentacja)
+- [Konfiguracja RTSP Video](#konfiguracja-rtsp-video)
 
 # VideoChat LLM z ASCII VNC – Prezentacja rozwiązania
 
@@ -68,3 +69,11 @@ VideoChat LLM to kompletne, prywatne i nowoczesne rozwiązanie AI na desktop. Id
 - Szczegóły techniczne: README.md, katalog docs/
 - Skrypt instalacyjny: install.sh
 - Skrypt testowy: test.sh
+
+---
+
+## Konfiguracja RTSP Video
+
+- Użytkownik może podać dane do streamu RTSP bezpośrednio w rozmowie z asystentem lub przez ustawienia.
+- Asystent automatycznie poprosi o wymagane informacje (adres, login, hasło) i zapisze konfigurację.
+- Dzięki temu możliwa jest prezentacja lub opis obrazu z dowolnego źródła RTSP.
