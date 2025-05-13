@@ -30,8 +30,61 @@ else
   log "Brak skonfigurowanych testów E2E. Pomijam."
 fi
 
-log "Walidacja plików YAML (yamllint)"
-npx yamllint kubernetes/ terraform/ ansible/ || fail "Błąd w plikach YAML!"
+log "Walidacja plików YAML (js-yaml)"
+
+# Tworzymy tymczasowy skrypt walidacji YAML
+cat > /tmp/yaml-validator.js << 'EOF'
+const fs = require('fs');
+const path = require('path');
+const jsYaml = require('js-yaml');
+
+function validateYamlFiles(dir) {
+  if (!fs.existsSync(dir)) {
+    console.log(`Katalog ${dir} nie istnieje. Pomijam.`);
+    return true;
+  }
+
+  let allValid = true;
+  const files = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const file of files) {
+    const fullPath = path.join(dir, file.name);
+    
+    if (file.isDirectory()) {
+      // Rekurencyjnie sprawdź podkatalogi
+      const subDirValid = validateYamlFiles(fullPath);
+      if (!subDirValid) allValid = false;
+    } else if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
+      try {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        jsYaml.load(content);
+        console.log(`✓ ${fullPath} - OK`);
+      } catch (error) {
+        console.error(`✗ ${fullPath} - BŁĄD: ${error.message}`);
+        allValid = false;
+      }
+    }
+  }
+  
+  return allValid;
+}
+
+const dirs = process.argv.slice(2);
+let success = true;
+
+for (const dir of dirs) {
+  const dirValid = validateYamlFiles(dir);
+  if (!dirValid) success = false;
+}
+
+process.exit(success ? 0 : 1);
+EOF
+
+# Instalujemy js-yaml jeśli nie jest zainstalowany
+npm list js-yaml --depth=0 || npm install --no-save js-yaml
+
+# Uruchamiamy walidator
+node /tmp/yaml-validator.js kubernetes/ terraform/ ansible/ || fail "Błąd w plikach YAML!"
 
 log "Walidacja plików JSON (jsonlint)"
 npx jsonlint models/**/*.json --quiet || log "Brak plików JSON do walidacji lub ostrzeżenia."

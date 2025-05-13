@@ -25,6 +25,23 @@ check_dependency npm
 check_dependency curl
 check_dependency wget
 
+# Instalacja zależności systemowych dla modułów natywnych
+log "Sprawdzanie zależności systemowych..."
+if command -v apt-get &> /dev/null; then
+  log "Wykryto system oparty na Debian/Ubuntu. Instalacja zależności..."
+  sudo apt-get update
+  sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+elif command -v dnf &> /dev/null; then
+  log "Wykryto system oparty na Fedora/RHEL. Instalacja zależności..."
+  sudo dnf install -y gcc-c++ cairo-devel pango-devel libjpeg-turbo-devel giflib-devel librsvg2-devel
+elif command -v pacman &> /dev/null; then
+  log "Wykryto system Arch Linux. Instalacja zależności..."
+  sudo pacman -Sy --noconfirm base-devel cairo pango libjpeg-turbo giflib librsvg
+else
+  log "OSTRZEŻENIE: Nie można automatycznie zainstalować zależności systemowych. Niektóre funkcje mogą nie działać."
+  log "Wymagane pakiety: build-essential, libcairo2-dev, libpango1.0-dev, libjpeg-dev, libgif-dev, librsvg2-dev"
+fi
+
 # Ścieżki
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$SCRIPT_DIR"
@@ -188,7 +205,23 @@ fi
 # Instalacja zależności
 log "Instalacja zależności npm..."
 cd "$APP_DIR"
-npm install
+
+# Usunięcie starych plików node_modules i package-lock.json, jeśli istnieją
+if [ -d "node_modules" ] || [ -f "package-lock.json" ]; then
+  log "Usuwanie starych plików node_modules i package-lock.json..."
+  rm -rf node_modules package-lock.json
+fi
+
+# Instalacja zależności z pominięciem opcjonalnych modułów, które mogą powodować problemy
+log "Instalacja zależności npm (może potrwać kilka minut)..."
+npm install --no-optional
+
+# Naprawianie uprawnień dla chrome-sandbox
+if [ -f "node_modules/electron/dist/chrome-sandbox" ]; then
+  log "Konfigurowanie uprawnień dla chrome-sandbox..."
+  sudo chown root:root node_modules/electron/dist/chrome-sandbox
+  sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+fi
 
 # Uprawnienia dla skryptów
 log "Aktualizacja uprawnień dla skryptów..."
@@ -218,3 +251,10 @@ cat > "$APP_DIR/config.json" << EOL
 EOL
 
 log "Instalacja zakończona! Uruchom aplikację poleceniem: ./bin/start-app"
+log ""
+log "UWAGA: Jeśli napotkasz problemy z uruchomieniem aplikacji, spróbuj:"
+log "  1. Upewnij się, że wszystkie zależności systemowe są zainstalowane"
+log "  2. Uruchom ponownie instalację z uprawnieniami administratora: sudo ./install.sh"
+log "  3. Sprawdź logi w katalogu ~/.npm/_logs/ w przypadku problemów z instalacją npm"
+log ""
+log "Dokumentacja znajduje się w katalogu ./docs/"

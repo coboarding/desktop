@@ -52,17 +52,62 @@ Aplikacja składa się z następujących komponentów:
            +----------+
 ```
 
-## Instalacja
+## Instalacja i zależności systemowe
 
-1. Sklonuj repozytorium
-2. Uruchom skrypt instalacyjny:
-   ```
+1. **Zalecane zależności systemowe (dla natywnych modułów Node.js):**
+   - Debian/Ubuntu: `sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev`
+   - Fedora/RHEL: `sudo dnf install -y gcc-c++ cairo-devel pango-devel libjpeg-turbo-devel giflib-devel librsvg2-devel`
+   - Arch Linux: `sudo pacman -Sy --noconfirm base-devel cairo pango libjpeg-turbo giflib librsvg`
+   - Jeśli nie możesz zainstalować automatycznie, sprawdź komunikaty w `install.sh`.
+
+2. **Instalacja projektu:**
+   ```sh
    ./install.sh
    ```
-3. Uruchom aplikację:
-   ```
+   Skrypt automatycznie sprawdzi i zainstaluje zależności systemowe oraz npm.
+
+3. **Uruchomienie aplikacji:**
+   ```sh
    ./bin/start-app
    ```
+   Skrypt uruchomi aplikację Electron z lokalnej instalacji.
+
+4. **Naprawa problemów:**
+   - Jeśli pojawią się błędy z uprawnieniami, uruchom `sudo ./install.sh`.
+   - Sprawdź logi w `~/.npm/_logs/` przy problemach z npm.
+
+## Testowanie i walidacja
+
+1. **Testy jednostkowe i E2E**:
+   ```sh
+   bash test.sh
+   ```
+   Skrypt uruchamia testy jednostkowe (Jest), E2E (jeśli dostępne), waliduje pliki YAML i JSON.
+
+2. **Walidacja konfiguracji:**
+   - YAML: `yamllint kubernetes/ terraform/ ansible/`
+   - JSON: `jsonlint models/**/*.json --quiet`
+
+## Struktura projektu i dokumentacja
+
+- Szczegółowa dokumentacja znajduje się w katalogu `./docs/`
+- Struktura katalogów i kluczowe pliki opisane są w `docs/2.md`
+
+## Najczęstsze problemy
+
+- **Problemy z natywnymi modułami**: Upewnij się, że masz zainstalowane zależności systemowe (patrz wyżej).
+- **Problemy z Electron**: Jeśli pojawi się komunikat o błędnej instalacji Electron, usuń `node_modules` i uruchom ponownie `install.sh`.
+- **Problemy z npm**: Sprawdź logi w `~/.npm/_logs/`.
+
+## Kontakt i wsparcie
+
+- Dokumentacja techniczna: katalog `docs/`
+- Skrypt instalacyjny: `install.sh`
+- Skrypt testowy: `test.sh`
+
+---
+
+Aplikacja VideoChat LLM z ASCII VNC to nowoczesny, samodzielny desktopowy asystent AI z pełną dokumentacją i automatyzacją instalacji oraz testów.
 
 ## Uruchomienie
 

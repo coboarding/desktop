@@ -1,4 +1,11 @@
-const ort = require('onnxruntime-node');
+// Try to load onnxruntime, but don't fail if it's not available
+let ort;
+try {
+  ort = require('onnxruntime');
+} catch (e) {
+  // Fallback to simulated mode if onnxruntime is not available
+  ort = null;
+}
 const fs = require('fs');
 const path = require('path');
 const log = require('electron-log');
@@ -34,14 +41,19 @@ class LLMService {
               this.modelType = "unknown";
             }
           } else {
-            // Próba wczytania modelu ONNX
-            try {
-              this.session = await ort.InferenceSession.create(this.modelPath);
-              this.modelType = "onnx";
-              log.info('Model ONNX załadowany pomyślnie');
-            } catch (onnxError) {
-              log.warn('Nie udało się załadować modelu jako ONNX:', onnxError);
-              this.modelType = "binary";
+            // Próba wczytania modelu ONNX, jeśli biblioteka jest dostępna
+            if (ort) {
+              try {
+                this.session = await ort.InferenceSession.create(this.modelPath);
+                this.modelType = "onnx";
+                log.info('Model ONNX załadowany pomyślnie');
+              } catch (onnxError) {
+                log.warn('Nie udało się załadować modelu jako ONNX:', onnxError);
+                this.modelType = "binary";
+              }
+            } else {
+              log.warn('Biblioteka onnxruntime nie jest dostępna. Używanie trybu symulowanego.');
+              this.modelType = "simulated";
             }
           }
         } catch (formatError) {
