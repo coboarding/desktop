@@ -1,4 +1,5 @@
-// No need to mock onnxruntime as the service handles its absence gracefully
+// Set NODE_ENV to 'test' to prevent actual module loading
+process.env.NODE_ENV = 'test';
 
 // Mock fs to avoid file system dependencies
 jest.mock('fs', () => ({

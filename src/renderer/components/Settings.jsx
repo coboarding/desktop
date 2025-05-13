@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import RTSPVideoDescription from './RTSPVideoDescription';
 
 function Settings() {
   const [audioSettings, setAudioSettings] = useState({
@@ -171,6 +172,11 @@ function Settings() {
             max="65535"
           />
         </div>
+      </div>
+      
+      <div className="settings-section">
+        <h2>Ustawienia RTSP Video</h2>
+        <RTSPVideoDescription onConfigChange={config => console.log('RTSP config:', config)} />
       </div>
       
       <div className="settings-section">

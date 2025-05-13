@@ -1,10 +1,20 @@
-// Try to load onnxruntime, but don't fail if it's not available
-let ort;
-try {
-  ort = require('onnxruntime');
-} catch (e) {
-  // Fallback to simulated mode if onnxruntime is not available
-  ort = null;
+// Mock implementation for onnxruntime when testing
+let ort = null;
+
+// Only try to load the real modules if we're not in a test environment
+if (process.env.NODE_ENV !== 'test') {
+  try {
+    // Try onnxruntime first
+    ort = require('onnxruntime');
+  } catch (e1) {
+    try {
+      // Then try onnxruntime-node
+      ort = require('onnxruntime-node');
+    } catch (e2) {
+      // Both failed, use simulated mode
+      ort = null;
+    }
+  }
 }
 const fs = require('fs');
 const path = require('path');
