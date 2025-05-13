@@ -13,6 +13,7 @@ const TTSService = require('./services/tts');
 const K3sManager = require('./infrastructure/k3s');
 const NoVNCServer = require('./services/novncServer');
 const AsciiGenerator = require('./services/asciifier');
+const LogMonitorService = require('./services/logMonitor');
 
 // Ścieżki
 const appPath = app.getAppPath();
@@ -29,6 +30,7 @@ let ttsService = null;
 let k3sManager = null;
 let novncServer = null;
 let asciiGenerator = null;
+let logMonitor = null;
 
 // Inicjalizacja serwisów
 const initializeServices = async () => {
@@ -79,6 +81,51 @@ const initializeServices = async () => {
     });
     await novncServer.initialize();
     
+    // Przekaż referencję do serwisu automatyzacji przeglądarki do LLM
+    if (novncServer && novncServer.browserAutomation) {
+      llmService.browserAutomation = novncServer.browserAutomation;
+      
+      // Dodaj obsługę komend przeglądarki z LLM
+      llmService.on('browser-command', async (command) => {
+        log.info(`Otrzymano komendę przeglądarki z LLM: ${command.action}`, command.params);
+        
+        try {
+          switch (command.action) {
+            case 'googleSearch':
+              await novncServer.browserAutomation.navigateTo('https://www.google.com');
+              await novncServer.browserAutomation.fillForm({ 'input[name="q"]': command.params.query });
+              await novncServer.browserAutomation.clickElement('input[name="btnK"], button[type="submit"]');
+              break;
+              
+            case 'formFill':
+              await novncServer.browserAutomation.navigateTo('https://www.w3schools.com/html/html_forms.asp');
+              await novncServer.browserAutomation.fillForm({
+                'input[name="firstname"]': 'Test User',
+                'input[name="lastname"]': 'Automation'
+              });
+              break;
+              
+            case 'navigateTo':
+              await novncServer.browserAutomation.navigateTo(command.params.url);
+              break;
+              
+            case 'takeScreenshot':
+              await novncServer.browserAutomation.takeScreenshot('command-screenshot');
+              break;
+              
+            case 'clickElement':
+              // Próba znalezienia elementu po tekście lub selektorze
+              await novncServer.browserAutomation.clickElement(command.params.target);
+              break;
+          }
+        } catch (error) {
+          log.error(`Błąd wykonywania komendy przeglądarki: ${error.message}`);
+        }
+      });
+      
+      log.info('Integracja LLM z automatyzacją przeglądarki zakończona pomyślnie');
+    }
+    
     // Inicjalizacja K3s w tle (jeśli potrzebne)
     k3sManager = new K3sManager({
       kubeconfig: path.join(appPath, 'kubernetes/kubeconfig')
@@ -86,6 +133,15 @@ const initializeServices = async () => {
 
     if (process.env.USE_K3S === 'true') {
       await k3sManager.start();
+    }
+    
+    // Inicjalizacja serwisu monitorowania logów
+    if (novncServer && novncServer.browserAutomation) {
+      logMonitor = new LogMonitorService();
+      await logMonitor.initialize(novncServer.browserAutomation);
+      log.info('Serwis monitorowania logów zainicjalizowany');
+    } else {
+      log.warn('Nie można zainicjalizować serwisu monitorowania logów - brak serwisu automatyzacji przeglądarki');
     }
 
     log.info('Wszystkie serwisy zainicjalizowane!');
@@ -123,161 +179,119 @@ const setupExpressServer = () => {
   
   // Obsługa Socket.IO
   io.on('connection', (socket) => {
-    log.info('Nowe połączenie WebSocket');
-    
-    // Obsługa danych audio do STT
+    log.info('Nowe połączenie Socket.IO');
+
+    // Obsługa danych audio od klienta
     socket.on('audio-data', async (audioData) => {
       try {
-        const result = await sttService.transcribe(audioData);
+        log.info('Otrzymano dane audio od klienta');
         
-        // Sprawdź, czy wynik to obiekt z typem web-stt-request
-        if (result && result.type === 'web-stt-request') {
-          // Wyślij prośbę do przeglądarki o użycie Web Speech API
-          socket.emit('web-stt-request');
+        // Przetwarzanie audio na tekst
+        let transcription;
+        try {
+          transcription = await sttService.transcribe(audioData);
+          log.info(`Transkrypcja: ${JSON.stringify(transcription)}`);
+        } catch (error) {
+          log.error('Błąd transkrypcji:', error);
+          socket.emit('transcription', { assistant: 'Przepraszam, wystąpił błąd podczas przetwarzania mowy.' });
           return;
         }
-        
-        const text = result; // Jeśli nie jest to obiekt, to jest to tekst
-        
-        if (text && text.trim()) {
-          log.info(`Rozpoznany tekst: "${text}"`);
-          
-          // Zmiana stanu animacji na "listening" podczas rozpoznawania mowy
-          if (novncServer) {
-            novncServer.setAnimation('listening');
-          }
-          
-          // Informuj użytkownika, że jego wypowiedź została rozpoznana
-          socket.emit('transcription', { user: text });
-          
-          // Zmiana stanu animacji na "thinking" podczas przetwarzania
-          if (novncServer) {
-            novncServer.setAnimation('thinking');
-          }
 
-          // Przetwarzanie przez LLM
-          const response = await llmService.process(text);
-          
-          // Wysłanie odpowiedzi tekstowej
-          socket.emit('transcription', { assistant: response });
-          
-          // Zmiana stanu animacji na "talking"
-          if (novncServer) {
-            novncServer.setAnimation('talking');
-          }
+        // Jeśli otrzymaliśmy obiekt z typem web-stt-request, wysyłamy żądanie do przeglądarki
+        if (transcription && transcription.type === 'web-stt-request') {
+          log.info('Wysyłanie żądania web-stt-request do przeglądarki');
+          socket.emit('web-stt-request', transcription);
+          return;
+        }
 
-          // Generowanie odpowiedzi głosowej
-          const audioResponse = await ttsService.synthesize(response);
+        // Jeśli mamy transkrypcję, przetwarzamy ją przez LLM
+        if (transcription && typeof transcription === 'string') {
+          log.info(`Przetwarzanie transkrypcji przez LLM: "${transcription}"`);
           
-          // Sprawdź, czy odpowiedź to obiekt z typem web-tts
-          if (audioResponse && audioResponse.type === 'web-tts') {
-            // Wyślij tekst do przeglądarki do odczytania przez Web Speech API
-            socket.emit('web-tts', audioResponse);
-          } else {
-            // Wyślij binarną odpowiedź audio (stary sposób)
-            socket.emit('audio-response', audioResponse);
-          }
-
-          // Powrót do stanu "listening" po zakończeniu mówienia
-          setTimeout(() => {
-            if (novncServer) {
-              novncServer.setAnimation('listening');
+          // Wysyłamy transkrypcję do klienta
+          socket.emit('transcription', { user: transcription });
+          
+          // Przetwarzanie tekstu przez LLM
+          try {
+            const response = await llmService.processText(transcription);
+            log.info(`Odpowiedź LLM: "${response}"`);
+            
+            // Wysyłamy odpowiedź do klienta
+            socket.emit('transcription', { assistant: response });
+            
+            // Przetwarzanie tekstu na mowę
+            try {
+              const ttsResponse = await ttsService.synthesize(response);
+              
+              // Jeśli otrzymaliśmy obiekt z typem web-tts, wysyłamy go do przeglądarki
+              if (ttsResponse && ttsResponse.type === 'web-tts') {
+                log.info(`Wysyłanie żądania web-tts do przeglądarki: ${JSON.stringify(ttsResponse)}`);
+                socket.emit('web-tts', ttsResponse);
+              } else if (ttsResponse) {
+                // W przeciwnym razie wysyłamy dane audio
+                socket.emit('audio-response', ttsResponse);
+              }
+            } catch (error) {
+              log.error('Błąd syntezy mowy:', error);
             }
-          }, 1000);
+          } catch (error) {
+            log.error('Błąd przetwarzania tekstu przez LLM:', error);
+            socket.emit('transcription', { assistant: 'Przepraszam, wystąpił błąd podczas przetwarzania tekstu.' });
+          }
         }
       } catch (error) {
-        log.error('Błąd przetwarzania audio:', error);
-        socket.emit('error', { message: 'Wystąpił błąd podczas przetwarzania audio' });
+        log.error('Błąd przetwarzania danych audio:', error);
+        socket.emit('transcription', { assistant: 'Przepraszam, wystąpił błąd podczas przetwarzania danych audio.' });
       }
     });
-    
-    // Obsługa wyników Web Speech API z przeglądarki
+
+    // Obsługa wyników Web Speech API od klienta
     socket.on('web-stt-result', async (data) => {
       try {
+        log.info(`Otrzymano wynik Web Speech API: ${JSON.stringify(data)}`);
+        
         if (data && data.transcript) {
-          const text = data.transcript;
-          log.info(`Rozpoznany tekst z Web Speech API: "${text}"`);
+          // Wysyłamy transkrypcję do klienta
+          socket.emit('transcription', { user: data.transcript });
           
-          // Zmiana stanu animacji na "listening" podczas rozpoznawania mowy
-          if (novncServer) {
-            novncServer.setAnimation('listening');
-          }
-          
-          // Informuj użytkownika, że jego wypowiedź została rozpoznana
-          socket.emit('transcription', { user: text });
-          
-          // Zmiana stanu animacji na "thinking" podczas przetwarzania
-          if (novncServer) {
-            novncServer.setAnimation('thinking');
-          }
-
-          // Przetwarzanie przez LLM
-          const response = await llmService.process(text);
-          
-          // Wysłanie odpowiedzi tekstowej
-          socket.emit('transcription', { assistant: response });
-          
-          // Zmiana stanu animacji na "talking"
-          if (novncServer) {
-            novncServer.setAnimation('talking');
-          }
-
-          // Generowanie odpowiedzi głosowej
-          const audioResponse = await ttsService.synthesize(response);
-          
-          // Sprawdź, czy odpowiedź to obiekt z typem web-tts
-          if (audioResponse && audioResponse.type === 'web-tts') {
-            // Wyślij tekst do przeglądarki do odczytania przez Web Speech API
-            socket.emit('web-tts', audioResponse);
-          } else {
-            // Wyślij binarną odpowiedź audio (stary sposób)
-            socket.emit('audio-response', audioResponse);
-          }
-
-          // Powrót do stanu "listening" po zakończeniu mówienia
-          setTimeout(() => {
-            if (novncServer) {
-              novncServer.setAnimation('listening');
+          // Przetwarzanie tekstu przez LLM
+          try {
+            const response = await llmService.processText(data.transcript);
+            log.info(`Odpowiedź LLM: "${response}"`);
+            
+            // Wysyłamy odpowiedź do klienta
+            socket.emit('transcription', { assistant: response });
+            
+            // Przetwarzanie tekstu na mowę
+            try {
+              const ttsResponse = await ttsService.synthesize(response);
+              
+              // Jeśli otrzymaliśmy obiekt z typem web-tts, wysyłamy go do przeglądarki
+              if (ttsResponse && ttsResponse.type === 'web-tts') {
+                log.info(`Wysyłanie żądania web-tts do przeglądarki: ${JSON.stringify(ttsResponse)}`);
+                socket.emit('web-tts', ttsResponse);
+              } else if (ttsResponse) {
+                // W przeciwnym razie wysyłamy dane audio
+                socket.emit('audio-response', ttsResponse);
+              }
+            } catch (error) {
+              log.error('Błąd syntezy mowy:', error);
             }
-          }, 1000);
+          } catch (error) {
+            log.error('Błąd przetwarzania tekstu przez LLM:', error);
+            socket.emit('transcription', { assistant: 'Przepraszam, wystąpił błąd podczas przetwarzania tekstu.' });
+          }
         }
       } catch (error) {
-        log.error('Błąd przetwarzania tekstu z Web Speech API:', error);
-        socket.emit('error', { message: 'Wystąpił błąd podczas przetwarzania tekstu' });
+        log.error('Błąd przetwarzania wyniku Web Speech API:', error);
+        socket.emit('transcription', { assistant: 'Przepraszam, wystąpił błąd podczas przetwarzania wyniku rozpoznawania mowy.' });
       }
     });
-    
-    // Auto-start konwersacji po połączeniu
-    setTimeout(async () => {
-      const welcomeMessage = "Witaj w aplikacji VideoChat! Mikrofon został automatycznie włączony, możesz od razu zacząć mówić. Jak mogę Ci dziś pomóc?";
 
-      // Zmiana stanu animacji na "talking"
-      if (novncServer) {
-        novncServer.setAnimation('talking');
-      }
-
-      // Wysłanie wiadomości powitalnej
-      socket.emit('transcription', { assistant: welcomeMessage });
-
-      // Generowanie odpowiedzi głosowej
-      const audioResponse = await ttsService.synthesize(welcomeMessage);
-      
-      // Sprawdź, czy odpowiedź to obiekt z typem web-tts
-      if (audioResponse && audioResponse.type === 'web-tts') {
-        // Wyślij tekst do przeglądarki do odczytania przez Web Speech API
-        socket.emit('web-tts', audioResponse);
-      } else {
-        // Wyślij binarną odpowiedź audio (stary sposób)
-        socket.emit('audio-response', audioResponse);
-      }
-
-      // Powrót do stanu "listening" po zakończeniu mówienia
-      setTimeout(() => {
-        if (novncServer) {
-          novncServer.setAnimation('listening');
-        }
-      }, 3000);
-    }, 1000);
+    // Obsługa rozłączenia
+    socket.on('disconnect', () => {
+      log.info('Klient Socket.IO rozłączony');
+    });
   });
   
   // Uruchomienie serwera na porcie 3000

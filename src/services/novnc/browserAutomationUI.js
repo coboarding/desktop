@@ -22,6 +22,11 @@ function getBrowserAutomationHTML() {
           <button id="screenshot-btn" title="Take Screenshot">📷</button>
           <button id="test-btn" title="Run Test">▶️</button>
         </div>
+        <div class="automation-buttons">
+          <button id="google-search-btn" title="Automatyczne wyszukiwanie Google">🔍 Google Search</button>
+          <button id="form-test-btn" title="Automatyczne wypełnianie formularzy">📝 Form Test</button>
+          <button id="custom-test-btn" title="Uruchom własny test">📋 Custom Test</button>
+        </div>
       </div>
       <div id="browser-status">Ready</div>
     </div>
@@ -92,6 +97,30 @@ function getBrowserAutomationCSS() {
     .action-buttons {
       display: flex;
       gap: 8px;
+      margin-bottom: 8px;
+    }
+    
+    .automation-buttons {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    
+    .automation-buttons button {
+      padding: 8px 12px;
+      background-color: #bd93f9;
+      color: #282a36;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .automation-buttons button:hover {
+      background-color: #ff79c6;
     }
     
     .action-buttons button {
@@ -213,6 +242,9 @@ function getBrowserAutomationScript() {
     const refreshBtn = document.getElementById('refresh-btn');
     const screenshotBtn = document.getElementById('screenshot-btn');
     const testBtn = document.getElementById('test-btn');
+    const googleSearchBtn = document.getElementById('google-search-btn');
+    const formTestBtn = document.getElementById('form-test-btn');
+    const customTestBtn = document.getElementById('custom-test-btn');
     const browserStatus = document.getElementById('browser-status');
     
     // Create test scenario editor
@@ -316,6 +348,49 @@ function getBrowserAutomationScript() {
     });
     
     testBtn.addEventListener('click', () => {
+      testScenarioEditor.classList.add('visible');
+    });
+    
+    // Przycisk automatycznego wyszukiwania Google
+    googleSearchBtn.addEventListener('click', () => {
+      // Użyj nowej komendy googleSearch zamiast run-scenario
+      sendCommand('googleSearch', { query: "Playwright browser automation" });
+      updateStatus('Uruchamianie automatycznego wyszukiwania Google...');
+    });
+    
+    // Przycisk automatycznego wypełniania formularzy
+    formTestBtn.addEventListener('click', () => {
+      // Użyj nowej komendy formFill zamiast run-scenario
+      sendCommand('formFill');
+      updateStatus('Uruchamianie automatycznego wypełniania formularza...');
+    });
+    
+    // Przycisk uruchamiania własnego testu
+    customTestBtn.addEventListener('click', () => {
+      // Otwórz edytor scenariuszy z przykładowym szablonem
+      const templateScenario = {
+        name: "Custom Test",
+        description: "Własny scenariusz testowy",
+        stopOnError: true,
+        screenshotOnComplete: true,
+        steps: [
+          {
+            action: "navigate",
+            url: "https://example.com"
+          },
+          {
+            action: "wait",
+            selector: "h1",
+            timeout: 5000
+          },
+          {
+            action: "screenshot",
+            name: "example-page"
+          }
+        ]
+      };
+      
+      document.getElementById('scenario-textarea').value = JSON.stringify(templateScenario, null, 2);
       testScenarioEditor.classList.add('visible');
     });
     

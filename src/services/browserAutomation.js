@@ -155,6 +155,67 @@ class BrowserAutomationService extends EventEmitter {
       return false;
     }
   }
+  
+  /**
+   * Restart przeglądarki
+   * @param {string} [url=null] - Opcjonalny URL do załadowania po restarcie
+   * @returns {Promise<boolean>} - Promise zwracający true jeśli restart się powiódł
+   */
+  async restart(url = null) {
+    try {
+      log.info('Restartowanie przeglądarki...');
+      
+      // Zapamiętaj aktualny URL jeśli nie podano nowego
+      const targetUrl = url || this.currentUrl || 'about:blank';
+      
+      // Zatrzymaj przeglądarkę
+      await this.stopBrowser();
+      
+      // Odczekaj chwilę przed ponownym uruchomieniem
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Uruchom przeglądarkę ponownie
+      const started = await this.startBrowser();
+      
+      if (started && targetUrl !== 'about:blank') {
+        // Przejdź do zapisanego URL
+        await this.navigateTo(targetUrl);
+      }
+      
+      log.info('Przeglądarka zrestartowana pomyślnie');
+      return true;
+    } catch (error) {
+      log.error('Błąd restartowania przeglądarki:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Przyznanie uprawnień dla kontekstu przeglądarki
+   * @param {Array<string>} permissions - Lista uprawnień do przyznania (np. ['microphone', 'camera'])
+   * @param {string} [origin='*'] - Domena, dla której przyznawane są uprawnienia
+   * @returns {Promise<boolean>} - Promise zwracający true jeśli przyznanie uprawnień się powiodło
+   */
+  async grantPermissions(permissions, origin = '*') {
+    if (!this.isRunning || !this.context) {
+      log.error('Nie można przyznać uprawnień - przeglądarka nie jest uruchomiona');
+      return false;
+    }
+    
+    try {
+      log.info(`Przyznawanie uprawnień: ${permissions.join(', ')} dla ${origin}`);
+      await this.context.grantPermissions(permissions, { origin });
+      log.info('Uprawnienia przyznane pomyślnie');
+      
+      // Odśwież stronę, aby zastosować nowe uprawnienia
+      await this.page.reload();
+      
+      return true;
+    } catch (error) {
+      log.error('Błąd przyznawania uprawnień:', error);
+      return false;
+    }
+  }
 
   /**
    * Przejście do podanego URL

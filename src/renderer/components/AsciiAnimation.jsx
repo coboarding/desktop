@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 
 function AsciiAnimation({ animationType = 'idle', width = 500, height = 400 }) {
   const [novncUrl, setNovncUrl] = useState('');
+  const iframeRef = useRef(null);
+  const [animationClass, setAnimationClass] = useState('');
 
   useEffect(() => {
     // Dynamiczne generowanie URL do noVNC
@@ -15,6 +17,9 @@ function AsciiAnimation({ animationType = 'idle', width = 500, height = 400 }) {
     // Powiadom główny proces o zmianie typu animacji
     window.electronAPI.setAnimationType(animationType);
 
+    // Ustaw klasę CSS na podstawie typu animacji
+    setAnimationClass(`animation-${animationType}`);
+
     // Log dla debugowania
     console.log(`Zmiana typu animacji: ${animationType}`);
     console.log(`NoVNC URL: ${url}`);
@@ -22,8 +27,9 @@ function AsciiAnimation({ animationType = 'idle', width = 500, height = 400 }) {
   }, [animationType]);
 
   return (
-    <div className="ascii-animation">
+    <div className={`ascii-animation ${animationClass}`}>
       <iframe
+        ref={iframeRef}
         src={novncUrl}
         width={width}
         height={height}
@@ -33,6 +39,21 @@ function AsciiAnimation({ animationType = 'idle', width = 500, height = 400 }) {
         title="ASCII Animation"
         sandbox="allow-scripts allow-same-origin"
       />
+      {/* Nakładka wskazująca stan animacji */}
+      <div className="animation-overlay">
+        {animationType === 'listening' && (
+          <div className="listening-animation">
+            <div className="listening-wave"></div>
+            <div className="listening-wave"></div>
+            <div className="listening-wave"></div>
+          </div>
+        )}
+        {animationType === 'talking' && (
+          <div className="talking-animation">
+            <div className="talking-circle"></div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

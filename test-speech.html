@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Web Speech API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .section {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+        }
+        .transcript {
+            min-height: 100px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .listening-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: red;
+            border-radius: 50%;
+            margin-left: 10px;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+            100% { transform: scale(0.95); opacity: 1; }
+        }
+        .log {
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Web Speech API</h1>
+    
+    <div class="container">
+        <div class="section">
+            <h2>Speech Recognition (STT)</h2>
+            <div class="controls">
+                <button id="startSpeechRecognition">Start Recognition</button>
+                <button id="stopSpeechRecognition" disabled>Stop Recognition</button>
+            </div>
+            <div class="status" id="sttStatus">Status: Idle</div>
+            <div class="transcript" id="transcript"></div>
+        </div>
+        
+        <div class="section">
+            <h2>Speech Synthesis (TTS)</h2>
+            <div class="controls">
+                <input type="text" id="ttsText" placeholder="Enter text to speak" style="flex-grow: 1; padding: 8px;">
+                <button id="speakText">Speak</button>
+                <button id="stopSpeaking">Stop</button>
+            </div>
+            <div class="status" id="ttsStatus">Status: Idle</div>
+            <div class="controls">
+                <label>
+                    Voice:
+                    <select id="voiceSelect"></select>
+                </label>
+                <label>
+                    Rate:
+                    <input type="range" id="rate" min="0.5" max="2" value="1" step="0.1">
+                    <span id="rateValue">1</span>
+                </label>
+                <label>
+                    Pitch:
+                    <input type="range" id="pitch" min="0.5" max="2" value="1" step="0.1">
+                    <span id="pitchValue">1</span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Debug Log</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // Funkcja do logowania
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(message);
+        }
+
+        // Sprawdzenie dostępności Web Speech API
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            log('ERROR: Web Speech API nie jest obsługiwane w tej przeglądarce.');
+            document.getElementById('startSpeechRecognition').disabled = true;
+            document.getElementById('sttStatus').textContent = 'Status: Web Speech API nie jest obsługiwane';
+        } else {
+            log('Web Speech API jest obsługiwane w tej przeglądarce.');
+        }
+
+        // Inicjalizacja Speech Recognition
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'pl-PL';
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            
+            recognition.onstart = function() {
+                log('Speech Recognition: rozpoczęto nasłuchiwanie');
+                document.getElementById('sttStatus').innerHTML = 'Status: Listening <span class="listening-indicator"></span>';
+                document.getElementById('startSpeechRecognition').disabled = true;
+                document.getElementById('stopSpeechRecognition').disabled = false;
+            };
+            
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                let finalTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                        log(`Speech Recognition: wynik finalny: "${transcript}"`);
+                    } else {
+                        interimTranscript += transcript;
+                        log(`Speech Recognition: wynik tymczasowy: "${transcript}"`);
+                    }
+                }
+                
+                document.getElementById('transcript').innerHTML = 
+                    finalTranscript + 
+                    '<span style="color: gray;">' + interimTranscript + '</span>';
+            };
+            
+            recognition.onend = function() {
+                log('Speech Recognition: zakończono nasłuchiwanie');
+                document.getElementById('sttStatus').textContent = 'Status: Idle';
+                document.getElementById('startSpeechRecognition').disabled = false;
+                document.getElementById('stopSpeechRecognition').disabled = true;
+            };
+            
+            recognition.onerror = function(event) {
+                log(`Speech Recognition: błąd: ${event.error}`);
+                document.getElementById('sttStatus').textContent = `Status: Error - ${event.error}`;
+                document.getElementById('startSpeechRecognition').disabled = false;
+                document.getElementById('stopSpeechRecognition').disabled = true;
+            };
+        }
+        
+        // Obsługa przycisków Speech Recognition
+        document.getElementById('startSpeechRecognition').addEventListener('click', function() {
+            if (recognition) {
+                try {
+                    recognition.start();
+                    log('Speech Recognition: próba rozpoczęcia nasłuchiwania');
+                } catch (error) {
+                    log(`Speech Recognition: błąd podczas uruchamiania: ${error.message}`);
+                }
+            }
+        });
+        
+        document.getElementById('stopSpeechRecognition').addEventListener('click', function() {
+            if (recognition) {
+                recognition.stop();
+                log('Speech Recognition: zatrzymanie nasłuchiwania');
+            }
+        });
+        
+        // Inicjalizacja Speech Synthesis
+        const synth = window.speechSynthesis;
+        let voices = [];
+        
+        function populateVoiceList() {
+            voices = synth.getVoices();
+            const voiceSelect = document.getElementById('voiceSelect');
+            voiceSelect.innerHTML = '';
+            
+            voices.forEach((voice, i) => {
+                const option = document.createElement('option');
+                option.textContent = `${voice.name} (${voice.lang})`;
+                option.setAttribute('data-lang', voice.lang);
+                option.setAttribute('data-name', voice.name);
+                option.value = i;
+                voiceSelect.appendChild(option);
+            });
+            
+            // Wybierz domyślnie polski głos, jeśli jest dostępny
+            const polishVoiceIndex = voices.findIndex(voice => voice.lang.includes('pl-PL'));
+            if (polishVoiceIndex !== -1) {
+                voiceSelect.value = polishVoiceIndex;
+                log(`Znaleziono polski głos: ${voices[polishVoiceIndex].name}`);
+            }
+            
+            log(`Załadowano ${voices.length} głosów`);
+        }
+        
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = populateVoiceList;
+        }
+        
+        // Wywołaj raz, aby załadować głosy, które mogą być już dostępne
+        populateVoiceList();
+        
+        // Obsługa kontrolek TTS
+        document.getElementById('rate').addEventListener('input', function() {
+            document.getElementById('rateValue').textContent = this.value;
+        });
+        
+        document.getElementById('pitch').addEventListener('input', function() {
+            document.getElementById('pitchValue').textContent = this.value;
+        });
+        
+        // Obsługa przycisków Speech Synthesis
+        document.getElementById('speakText').addEventListener('click', function() {
+            if (synth.speaking) {
+                log('Speech Synthesis: już mówi, przerywam');
+                synth.cancel();
+            }
+            
+            const text = document.getElementById('ttsText').value;
+            if (!text) {
+                log('Speech Synthesis: brak tekstu do odczytania');
+                return;
+            }
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            const selectedVoice = document.getElementById('voiceSelect').value;
+            if (selectedVoice) {
+                utterance.voice = voices[selectedVoice];
+            }
+            
+            utterance.rate = parseFloat(document.getElementById('rate').value);
+            utterance.pitch = parseFloat(document.getElementById('pitch').value);
+            
+            utterance.onstart = function() {
+                log(`Speech Synthesis: rozpoczęto mówienie: "${text}"`);
+                document.getElementById('ttsStatus').textContent = 'Status: Speaking';
+            };
+            
+            utterance.onend = function() {
+                log('Speech Synthesis: zakończono mówienie');
+                document.getElementById('ttsStatus').textContent = 'Status: Idle';
+            };
+            
+            utterance.onerror = function(event) {
+                log(`Speech Synthesis: błąd: ${event.error}`);
+                document.getElementById('ttsStatus').textContent = `Status: Error - ${event.error}`;
+            };
+            
+            log(`Speech Synthesis: próba mówienia: "${text}"`);
+            synth.speak(utterance);
+        });
+        
+        document.getElementById('stopSpeaking').addEventListener('click', function() {
+            if (synth.speaking) {
+                log('Speech Synthesis: zatrzymanie mówienia');
+                synth.cancel();
+                document.getElementById('ttsStatus').textContent = 'Status: Idle';
+            }
+        });
+    </script>
+</body>
+</html>

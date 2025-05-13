@@ -352,6 +352,53 @@ class NoVNCServer {
           }
           break;
           
+        case 'googleSearch':
+          if (commandData && commandData.query) {
+            this._sendBrowserUpdate(socket, 'status', `Wyszukiwanie w Google: ${commandData.query}...`);
+            try {
+              // Przejdź do Google
+              await this.browserAutomation.navigateTo('https://www.google.com');
+              
+              // Wypełnij pole wyszukiwania
+              await this.browserAutomation.fillForm({ 'input[name="q"]': commandData.query });
+              
+              // Kliknij przycisk wyszukiwania
+              await this.browserAutomation.clickElement('input[name="btnK"], button[type="submit"]');
+              
+              // Poczekaj na wyniki wyszukiwania
+              await this.browserAutomation.page.waitForSelector('#search', { timeout: 5000 }).catch(() => {});
+              
+              // Wykonaj zrzut ekranu wyników
+              await this.browserAutomation.takeScreenshot('google-search-results');
+              
+              this._sendBrowserUpdate(socket, 'status', `Wyszukiwanie zakończone: ${commandData.query}`);
+            } catch (error) {
+              this._sendBrowserUpdate(socket, 'error', `Błąd wyszukiwania w Google: ${error.message}`);
+            }
+          }
+          break;
+          
+        case 'formFill':
+          this._sendBrowserUpdate(socket, 'status', 'Wypełnianie formularza testowego...');
+          try {
+            // Przejdź do strony z formularzem
+            await this.browserAutomation.navigateTo('https://www.w3schools.com/html/html_forms.asp');
+            
+            // Wypełnij formularz
+            await this.browserAutomation.fillForm({
+              'input[name="firstname"]': 'Test User',
+              'input[name="lastname"]': 'Automation'
+            });
+            
+            // Wykonaj zrzut ekranu wypełnionego formularza
+            await this.browserAutomation.takeScreenshot('form-filled');
+            
+            this._sendBrowserUpdate(socket, 'status', 'Formularz wypełniony pomyślnie');
+          } catch (error) {
+            this._sendBrowserUpdate(socket, 'error', `Błąd wypełniania formularza: ${error.message}`);
+          }
+          break;
+          
         case 'stop':
           await this.browserAutomation.stopBrowser();
           this._sendBrowserUpdate(socket, 'status', 'Przeglądarka zatrzymana');

@@ -1,19 +1,15 @@
 import React, { useRef, useEffect, useState } from 'react';
 import AsciiAnimation from './AsciiAnimation';
 
-function VideoChat({ isListening, isSpeaking, webSpeechActive, onStartListening, onStartWebSpeech, latestMessage }) {
-  const [botState, setBotState] = useState('idle');
+function VideoChat({ isListening, isSpeaking, webSpeechActive, latestMessage }) {
   const videoRef = useRef(null);
+  const [botState, setBotState] = useState('idle');
 
-  // Inicjalizacja kamery dla użytkownika
+  // Inicjalizacja kamery
   useEffect(() => {
-    const initCamera = async () => {
+    const startCamera = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false  // Audio obsługiwane oddzielnie
-        });
-
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -22,9 +18,9 @@ function VideoChat({ isListening, isSpeaking, webSpeechActive, onStartListening,
       }
     };
 
-    initCamera();
+    startCamera();
 
-    // Czyszczenie przy odmontowaniu
+    // Czyszczenie po odmontowaniu komponentu
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
         const tracks = videoRef.current.srcObject.getTracks();
@@ -33,38 +29,16 @@ function VideoChat({ isListening, isSpeaking, webSpeechActive, onStartListening,
     };
   }, []);
 
-  // Aktualizacja stanu bota na podstawie isListening, isSpeaking i webSpeechActive
+  // Aktualizacja stanu bota na podstawie stanu słuchania i mówienia
   useEffect(() => {
-    if (isListening || webSpeechActive) {
-      setBotState('listening');
-    } else if (isSpeaking) {
+    if (isSpeaking) {
       setBotState('talking');
+    } else if (isListening || webSpeechActive) {
+      setBotState('listening');
     } else {
       setBotState('idle');
     }
   }, [isListening, isSpeaking, webSpeechActive]);
-
-  // Automatyczne rozpoczęcie konwersacji
-  useEffect(() => {
-    // Opóźnienie, aby dać czas na ładowanie
-    const timer = setTimeout(() => {
-      if (!isListening && !isSpeaking && !webSpeechActive) {
-        // Automatyczne rozpoczęcie nasłuchiwania po otrzymaniu odpowiedzi od asystenta
-        if (latestMessage && latestMessage.type === 'assistant') {
-          setTimeout(() => {
-            // Preferuj Web Speech API, jeśli jest dostępne
-            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-              onStartWebSpeech();
-            } else {
-              onStartListening();
-            }
-          }, 1000);
-        }
-      }
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [isListening, isSpeaking, webSpeechActive, latestMessage, onStartListening, onStartWebSpeech]);
 
   return (
     <div className="video-chat-container">
@@ -95,28 +69,14 @@ function VideoChat({ isListening, isSpeaking, webSpeechActive, onStartListening,
         </div>
       </div>
       
-      <div className="message-container">
-        {latestMessage && (
-          <div className={`message ${latestMessage.type}`}>
-            {latestMessage.text}
-          </div>
-        )}
-      </div>
-      
-      <div className="controls">
-        <button 
-          className="mic-button"
-          onClick={onStartWebSpeech || onStartListening}
-          disabled={isListening || isSpeaking || webSpeechActive}
-        >
-          <span className="mic-icon">🎤</span>
-          {isListening || webSpeechActive ? 'Słucham...' : 'Naciśnij, aby mówić'}
-          {(isListening || webSpeechActive) && <div className="listening-indicator"></div>}
-        </button>
-        <div className="speech-status">
-          {webSpeechActive && <span className="web-speech-badge">Web Speech API</span>}
-          {isListening && !webSpeechActive && <span className="web-speech-badge">Mikrofon</span>}
-          {isSpeaking && <span className="web-speech-badge speaking">Mówię...</span>}
+      {/* Sekcja czatu */}
+      <div className="chat-section">
+        <div className="message-container">
+          {latestMessage && (
+            <div className={`message ${latestMessage.type}`}>
+              {latestMessage.text}
+            </div>
+          )}
         </div>
       </div>
     </div>

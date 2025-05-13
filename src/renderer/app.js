@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import VideoChat from './components/VideoChat';
 import ChatHistory from './components/ChatHistory';
 import Settings from './components/Settings';
+import SpeechControls from './components/SpeechControls';
+import BotCommands from './components/BotCommands';
 
 function App() {
   const [chatHistory, setChatHistory] = useState([]);
@@ -35,6 +37,48 @@ function App() {
 
       if (data.assistant) {
         setChatHistory(prev => [...prev, { type: 'assistant', text: data.assistant }]);
+        
+        // Automatycznie odczytaj odpowiedź asystenta za pomocą TTS
+        if ('speechSynthesis' in window) {
+          try {
+            // Zatrzymaj wszystkie poprzednie wypowiedzi
+            window.speechSynthesis.cancel();
+            
+            const utter = new window.SpeechSynthesisUtterance(data.assistant);
+            utter.lang = 'pl-PL';
+            utter.volume = 1.0;
+            utter.rate = 1.0;
+            utter.pitch = 1.0;
+            
+            console.log('Automatyczne odczytywanie odpowiedzi asystenta:', data.assistant);
+            
+            setIsSpeaking(true);
+            
+            utter.onend = () => {
+              console.log('Zakończono syntezę mowy');
+              setIsSpeaking(false);
+              
+              // Automatycznie uruchom rozpoznawanie mowy po zakończeniu wypowiedzi
+              setTimeout(() => {
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                  startWebSpeechRecognition();
+                } else {
+                  startListening();
+                }
+              }, 500);
+            };
+            
+            utter.onerror = (event) => {
+              console.error('Błąd syntezy mowy:', event);
+              setIsSpeaking(false);
+            };
+            
+            window.speechSynthesis.speak(utter);
+          } catch (error) {
+            console.error('Błąd podczas inicjalizacji syntezy mowy:', error);
+            setIsSpeaking(false);
+          }
+        }
       }
     });
 
@@ -45,16 +89,45 @@ function App() {
 
     // Nasłuchiwanie na web-tts (tekst do odczytania przez przeglądarkę)
     socket.current.on('web-tts', (data) => {
+      console.log('Otrzymano zdarzenie web-tts:', data);
       if ('speechSynthesis' in window) {
-        const utter = new window.SpeechSynthesisUtterance(data.text);
-        utter.lang = data.options?.lang || 'pl-PL';
-        utter.volume = data.options?.volume || 1.0;
-        utter.rate = data.options?.rate || 1.0;
-        utter.pitch = data.options?.pitch || 1.0;
-        
-        setIsSpeaking(true);
-        utter.onend = () => setIsSpeaking(false);
-        window.speechSynthesis.speak(utter);
+        try {
+          // Zatrzymaj wszystkie poprzednie wypowiedzi
+          window.speechSynthesis.cancel();
+          
+          const utter = new window.SpeechSynthesisUtterance(data.text);
+          utter.lang = data.options?.lang || 'pl-PL';
+          utter.volume = data.options?.volume || 1.0;
+          utter.rate = data.options?.rate || 1.0;
+          utter.pitch = data.options?.pitch || 1.0;
+          
+          console.log('Konfiguracja syntezy mowy:', {
+            text: data.text,
+            lang: utter.lang,
+            volume: utter.volume,
+            rate: utter.rate,
+            pitch: utter.pitch
+          });
+          
+          setIsSpeaking(true);
+          
+          utter.onend = () => {
+            console.log('Zakończono syntezę mowy');
+            setIsSpeaking(false);
+          };
+          
+          utter.onerror = (event) => {
+            console.error('Błąd syntezy mowy:', event);
+            setIsSpeaking(false);
+          };
+          
+          window.speechSynthesis.speak(utter);
+        } catch (error) {
+          console.error('Błąd podczas inicjalizacji syntezy mowy:', error);
+          setIsSpeaking(false);
+        }
+      } else {
+        console.error('Web Speech API (synteza) nie jest dostępne w tej przeglądarce');
       }
     });
 
@@ -89,6 +162,23 @@ function App() {
       }
     });
 
+    // Obsługa komend bota
+    const handleBotCommand = (event) => {
+      const { command } = event.detail;
+      console.log('Otrzymano komendę bota:', command);
+      
+      // Dodaj komendę do historii czatu jako wiadomość użytkownika
+      setChatHistory(prev => [...prev, { type: 'user', text: command }]);
+      
+      // Wyślij komendę do serwera
+      if (socket.current) {
+        socket.current.emit('message', { text: command });
+      }
+    };
+    
+    // Nasłuchuj na zdarzenia komend bota
+    window.addEventListener('bot-command', handleBotCommand);
+
     // Czyszczenie przy odmontowaniu
     return () => {
       if (socket.current) {
@@ -97,6 +187,7 @@ function App() {
       if (audioContext.current && audioContext.current.state !== 'closed') {
         audioContext.current.close();
       }
+      window.removeEventListener('bot-command', handleBotCommand);
     };
   }, []);
 
@@ -140,9 +231,19 @@ function App() {
 
   // Automatyczne uruchamianie nasłuchiwania audio po starcie aplikacji
   useEffect(() => {
-    // Spróbuj wystartować mikrofon od razu po uruchomieniu
-    startListening();
-    // eslint-disable-next-line
+    // Krótkie opóźnienie, aby dać czas na załadowanie komponentów
+    const timer = setTimeout(() => {
+      // Preferuj Web Speech API, jeśli jest dostępne
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        console.log('Automatyczne uruchamianie Web Speech API po starcie');
+        startWebSpeechRecognition();
+      } else {
+        console.log('Automatyczne uruchamianie mikrofonu po starcie');
+        startListening();
+      }
+    }, 1000);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   // Automatyczna wiadomość głosowa od bota po starcie aplikacji
@@ -201,21 +302,20 @@ function App() {
         }
       }, 5000);
     } catch (error) {
-      console.error('Błąd podczas uzyskiwania dostępu do mikrofonu:', error);
+      console.error('Błąd podczas inicjalizacji mikrofonu:', error);
+      
       // Fallback do Web Speech API
       if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        alert('Nie udało się uzyskać dostępu do mikrofonu. Spróbujemy użyć Web Speech API.');
         startWebSpeechRecognition();
       }
     }
   };
 
-  // Funkcja do uruchamiania Web Speech API jako fallback
+  // Funkcja do uruchamiania Web Speech API
   const startWebSpeechRecognition = () => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
-      
       recognition.lang = 'pl-PL';
       recognition.continuous = false;
       recognition.interimResults = false;
@@ -234,11 +334,20 @@ function App() {
         setWebSpeechActive(false);
       };
       
-      recognition.onerror = () => {
+      recognition.onerror = (error) => {
+        console.error('Błąd rozpoznawania mowy:', error);
         setWebSpeechActive(false);
       };
       
-      recognition.start();
+      try {
+        recognition.start();
+        console.log('Rozpoczęto rozpoznawanie mowy przez Web Speech API');
+      } catch (error) {
+        console.error('Błąd podczas uruchamiania rozpoznawania mowy:', error);
+        setWebSpeechActive(false);
+      }
+    } else {
+      console.error('Web Speech API nie jest dostępne w tej przeglądarce');
     }
   };
 
@@ -283,25 +392,41 @@ function App() {
 
   return (
     <div className="app-container">
-      <div className="tabs">
-        <button 
-          className={activeTab === 'chat' ? 'active' : ''} 
-          onClick={() => handleTabChange('chat')}
-        >
-          Czat
-        </button>
-        <button 
-          className={activeTab === 'history' ? 'active' : ''} 
-          onClick={() => handleTabChange('history')}
-        >
-          Historia
-        </button>
-        <button 
-          className={activeTab === 'settings' ? 'active' : ''} 
-          onClick={() => handleTabChange('settings')}
-        >
-          Ustawienia
-        </button>
+      <div className="top-section">
+        <div className="tabs-container">
+          <div className="tabs">
+            <button 
+              className={activeTab === 'chat' ? 'active' : ''} 
+              onClick={() => handleTabChange('chat')}
+            >
+              Czat
+            </button>
+            <button 
+              className={activeTab === 'history' ? 'active' : ''} 
+              onClick={() => handleTabChange('history')}
+            >
+              Historia
+            </button>
+            <button 
+              className={activeTab === 'settings' ? 'active' : ''} 
+              onClick={() => handleTabChange('settings')}
+            >
+              Ustawienia
+            </button>
+          </div>
+        </div>
+        
+        {/* Panel kontrolny - zawsze widoczny w prawym górnym rogu */}
+        <div className="control-panel">
+          <SpeechControls
+            isListening={isListening}
+            isSpeaking={isSpeaking}
+            webSpeechActive={webSpeechActive}
+            onStartListening={startListening}
+            onStartWebSpeech={startWebSpeechRecognition}
+          />
+          <BotCommands />
+        </div>
       </div>
       
       <div className="tab-content">
@@ -310,8 +435,6 @@ function App() {
             isListening={isListening} 
             isSpeaking={isSpeaking}
             webSpeechActive={webSpeechActive}
-            onStartListening={startListening}
-            onStartWebSpeech={startWebSpeechRecognition}
             latestMessage={getLatestMessage()}
           />
         )}

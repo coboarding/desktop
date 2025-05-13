@@ -1,5 +1,19 @@
 // Simple React implementation for the VideoChat LLM app
 document.addEventListener('DOMContentLoaded', () => {
+  // Inicjalizacja Web Speech API
+  if ('speechSynthesis' in window) {
+    console.log('Web Speech API dostępne, inicjalizacja głosów...');
+    // Wczytaj głosy - to może trwać chwilę
+    window.speechSynthesis.onvoiceschanged = () => {
+      const voices = window.speechSynthesis.getVoices();
+      console.log(`Załadowano ${voices.length} głosów:`, voices.map(v => `${v.name} (${v.lang})`));
+    };
+    // Wywołaj getVoices, aby rozpocząć ładowanie
+    window.speechSynthesis.getVoices();
+  } else {
+    console.error('Web Speech API nie jest obsługiwane w tej przeglądarce');
+  }
+  
   const root = document.getElementById('root');
   
   // Create main UI structure with full screen layout
@@ -22,6 +36,16 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="chat-container">
               <h2>Czat</h2>
               <div id="chat-history"></div>
+              <div class="command-shortcuts">
+                <h3>Komendy dla bota:</h3>
+                <div class="command-buttons">
+                  <button class="command-btn" data-command="Wyszukaj w Google frazę 'Playwright browser automation'">Wyszukaj w Google</button>
+                  <button class="command-btn" data-command="Wypełnij formularz na stronie W3Schools">Wypełnij formularz</button>
+                  <button class="command-btn" data-command="Przejdź do strony example.com">Otwórz stronę</button>
+                  <button class="command-btn" data-command="Zrób zrzut ekranu">Zrzut ekranu</button>
+                  <button class="command-btn" data-command="Kliknij pierwszy link na stronie">Kliknij link</button>
+                </div>
+              </div>
               <div class="controls">
                 <button id="start-btn">Start</button>
                 <button id="stop-btn">Stop</button>
@@ -180,6 +204,42 @@ document.addEventListener('DOMContentLoaded', () => {
       background-color: #6272a4;
       cursor: not-allowed;
     }
+    
+    .command-shortcuts {
+      margin: 10px 0;
+      padding: 10px;
+      background-color: #282a36;
+      border-radius: 5px;
+    }
+    
+    .command-shortcuts h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: #50fa7b;
+    }
+    
+    .command-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .command-btn {
+      padding: 6px 10px;
+      background-color: #ff79c6;
+      color: #282a36;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    }
+    
+    .command-btn:hover {
+      background-color: #50fa7b;
+      transform: translateY(-2px);
+    }
   `;
   document.head.appendChild(style);
   
@@ -191,6 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Handle incoming transcriptions
   socket.on('transcription', (data) => {
+    console.log('Otrzymano transkrypcję:', data);
     if (data.user) {
       addMessage('user', data.user);
     }
@@ -228,9 +289,29 @@ document.addEventListener('DOMContentLoaded', () => {
   let mediaRecorder = null;
   let audioChunks = [];
   
+  // Function to handle offline mode for speech recognition
+  async function handleOfflineMode() {
+    console.log('Przechodzenie do trybu offline dla rozpoznawania mowy');
+    // Informuj użytkownika o trybie offline
+    addMessage('system', 'Przechodzenie do trybu offline. Możesz użyć przycisków komend zamiast mowy.');
+    
+    // Wyświetl przyciski komend bardziej widocznie
+    const commandButtons = document.querySelectorAll('.command-btn');
+    commandButtons.forEach(btn => {
+      btn.style.backgroundColor = '#50fa7b';
+      btn.style.fontSize = '16px';
+      btn.style.padding = '10px 15px';
+      btn.style.margin = '5px';
+    });
+  }
+  
   // Function to start audio recording with Web Speech API
   async function startRecording() {
+    console.log('Rozpoczynanie nagrywania audio z Web Speech API');
     try {
+      // Dodaj wiadomość o rozpoczęciu nasłuchiwania
+      addMessage('system', 'Nasłuchiwanie... Mów teraz.');
+      
       // Najpierw sprawdź, czy użytkownik ma uprawnienia do mikrofonu
       try {
         // Najpierw proś o uprawnienia do mikrofonu
@@ -320,6 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Błąd rozpoznawania mowy:', event.error);
         if (event.error === 'no-speech') {
           console.log('Nie wykryto mowy');
+          // Nie pokazuj błędu użytkownikowi, po prostu kontynuuj nasłuchiwanie
         } else if (event.error === 'not-allowed') {
           addMessage('system', 'Brak dostępu do mikrofonu. Kliknij ikonkę kłódki w pasku adresu i zezwól na dostęp do mikrofonu.');
           
@@ -334,6 +416,21 @@ document.addEventListener('DOMContentLoaded', () => {
             startRecording();
           };
           document.getElementById('chat-history').appendChild(permissionBtn);
+        } else if (event.error === 'network') {
+          // Błąd sieci - spróbuj ponownie po krótkiej przerwie
+          addMessage('system', 'Wystąpił problem z połączeniem sieciowym. Spróbuję ponownie za chwilę...');
+          
+          // Zatrzymaj obecne rozpoznawanie
+          recognition.stop();
+          
+          // Spróbuj ponownie po krótkiej przerwie
+          setTimeout(() => {
+            console.log('Ponowna próba po błędzie sieci');
+            // Spróbuj ponownie z normalnym trybem
+            startRecording();
+          }, 2000);
+          
+          return;
         } else {
           addMessage('system', `Błąd rozpoznawania mowy: ${event.error}`);
         }
@@ -504,10 +601,47 @@ document.addEventListener('DOMContentLoaded', () => {
     addMessage('system', 'Mikrofon wyłączony');
   }
   
-  // Add event listeners to buttons
-  startBtn.addEventListener('click', startRecording);
+  // Funkcja do obsługi kliknięcia przycisku komendy
+  function handleCommandButtonClick(event) {
+    const command = event.target.getAttribute('data-command');
+    if (command) {
+      // Dodaj komendę do historii czatu jako wiadomość użytkownika
+      addMessage('user', command);
+      
+      // Wyślij komendę do serwera jako transkrypcję mowy
+      socket.emit('web-stt-result', { transcript: command });
+      
+      // Wyłącz przyciski na chwilę, aby uniknąć wielokrotnych kliknięć
+      const commandButtons = document.querySelectorAll('.command-btn');
+      commandButtons.forEach(btn => {
+        btn.disabled = true;
+      });
+      
+      // Włącz przyciski ponownie po krótkim czasie
+      setTimeout(() => {
+        commandButtons.forEach(btn => {
+          btn.disabled = false;
+        });
+      }, 2000);
+    }
+  }
   
-  stopBtn.addEventListener('click', stopRecording);
+  // Dodaj obsługę zdarzeń do przycisków komend
+  const commandButtons = document.querySelectorAll('.command-btn');
+  commandButtons.forEach(btn => {
+    btn.addEventListener('click', handleCommandButtonClick);
+  });
+  
+  // Add event listeners to buttons
+  startBtn.addEventListener('click', () => {
+    console.log('Przycisk Start kliknięty');
+    startRecording();
+  });
+  
+  stopBtn.addEventListener('click', () => {
+    console.log('Przycisk Stop kliknięty');
+    stopRecording();
+  });
   
   // Function to fetch and set the noVNC port
   async function setupNoVNC() {
@@ -528,6 +662,130 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Obsługa odpowiedzi audio z serwera
+  socket.on('audio-response', (audioData) => {
+    try {
+      // Konwersja danych binarnych na ArrayBuffer
+      const buffer = new Uint8Array(audioData).buffer;
+      const blob = new Blob([buffer], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      
+      // Odtwarzanie dźwięku
+      const audio = new Audio(url);
+      audio.play();
+      
+      // Zwolnienie URL po zakończeniu odtwarzania
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+      };
+    } catch (error) {
+      console.error('Błąd odtwarzania audio:', error);
+      addMessage('system', 'Błąd odtwarzania odpowiedzi głosowej');
+    }
+  });
+  
+  // Obsługa żądania Web TTS (synteza mowy w przeglądarce)
+  socket.on('web-tts', (data) => {
+    console.log('Otrzymano żądanie web-tts:', data);
+    try {
+      // Sprawdź, czy przeglądarka obsługuje Web Speech API - syntezę mowy
+      if (!('speechSynthesis' in window)) {
+        console.error('Web Speech API (synteza mowy) nie jest obsługiwana w tej przeglądarce');
+        addMessage('system', 'Twoja przeglądarka nie obsługuje syntezy mowy. Używanie trybu awaryjnego.');
+        return;
+      }
+      
+      // Pobierz tekst do odczytania
+      const text = data.text || data;
+      console.log('Tekst do odczytania:', text);
+      
+      // Anuluj wszystkie poprzednie wypowiedzi
+      window.speechSynthesis.cancel();
+      
+      // Utwórz nowy obiekt wypowiedzi
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Ustaw język na polski
+      utterance.lang = 'pl-PL';
+      
+      // Opcjonalne ustawienia głosu
+      utterance.rate = 1.0; // Prędkość mówienia (0.1 do 10)
+      utterance.pitch = 1.0; // Wysokość głosu (0 do 2)
+      utterance.volume = 1.0; // Głośność (0 do 1)
+      
+      // Pobierz dostępne głosy
+      let voices = window.speechSynthesis.getVoices();
+      console.log('Dostępne głosy:', voices.map(v => `${v.name} (${v.lang})`));
+      
+      // Jeśli lista głosów jest pusta, poczekaj na załadowanie głosów
+      if (voices.length === 0) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          voices = window.speechSynthesis.getVoices();
+          console.log('Głosy załadowane:', voices.map(v => `${v.name} (${v.lang})`));
+          
+          // Spróbuj znaleźć polski głos
+          const polishVoice = voices.find(voice => voice.lang.startsWith('pl'));
+          if (polishVoice) {
+            console.log('Znaleziono polski głos:', polishVoice.name);
+            utterance.voice = polishVoice;
+          }
+          
+          // Rozpocznij syntezę mowy
+          window.speechSynthesis.speak(utterance);
+        };
+      } else {
+        // Spróbuj znaleźć polski głos
+        const polishVoice = voices.find(voice => voice.lang.startsWith('pl'));
+        if (polishVoice) {
+          console.log('Znaleziono polski głos:', polishVoice.name);
+          utterance.voice = polishVoice;
+        }
+        
+        // Obsługa zdarzeń
+        utterance.onstart = () => {
+          console.log('Rozpoczęto syntezę mowy');
+        };
+        
+        utterance.onend = () => {
+          console.log('Zakończono syntezę mowy');
+        };
+        
+        utterance.onerror = (event) => {
+          console.error('Błąd syntezy mowy:', event);
+          addMessage('system', 'Błąd syntezy mowy. Spróbuj odświeżyć stronę.');
+        };
+        
+        // Rozpocznij syntezę mowy
+        console.log('Rozpoczynam syntezę mowy...');
+        window.speechSynthesis.speak(utterance);
+      }
+      
+    } catch (error) {
+      console.error('Błąd syntezy mowy:', error);
+      addMessage('system', 'Błąd syntezy mowy. Spróbuj odświeżyć stronę.');
+    }
+  });
+  
+  // Obsługa żądania użycia Web Speech API
+  socket.on('web-stt-request', () => {
+    try {
+      // Sprawdź, czy przeglądarka obsługuje Web Speech API
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        console.error('Web Speech API nie jest obsługiwana w tej przeglądarce');
+        addMessage('system', 'Twoja przeglądarka nie obsługuje rozpoznawania mowy. Spróbuj użyć Chrome.');
+        return;
+      }
+      
+      // Jeśli nagrywanie nie jest aktywne, uruchom je
+      if (!isRecording) {
+        startRecording();
+      }
+    } catch (error) {
+      console.error('Błąd uruchamiania Web Speech API:', error);
+      addMessage('system', 'Błąd uruchamiania rozpoznawania mowy. Spróbuj odświeżyć stronę.');
+    }
+  });
+  
   // Initialize the app
   initCamera();
   setupNoVNC();
