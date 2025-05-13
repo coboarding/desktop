@@ -8,39 +8,40 @@ function App() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
-  
+  const [rtspConfig, setRtspConfig] = useState(null);
+
   const socket = useRef(null);
   const audioContext = useRef(null);
   const audioRecorder = useRef(null);
   const audioPlayer = useRef(null);
-  
+
   // Inicjalizacja Socket.IO
   useEffect(() => {
     // Połączenie z serwerem Socket.IO
     socket.current = io();
-    
+
     // Inicjalizacja kontekstu audio
     audioContext.current = new (window.AudioContext || window.webkitAudioContext)();
-    
+
     // Utworzenie odtwarzacza audio
     audioPlayer.current = new Audio();
-    
+
     // Nasłuchiwanie na transkrypcje
     socket.current.on('transcription', (data) => {
       if (data.user) {
         setChatHistory(prev => [...prev, { type: 'user', text: data.user }]);
       }
-      
+
       if (data.assistant) {
         setChatHistory(prev => [...prev, { type: 'assistant', text: data.assistant }]);
       }
     });
-    
+
     // Nasłuchiwanie na odpowiedzi audio
     socket.current.on('audio-response', (audioData) => {
       playAudioResponse(audioData);
     });
-    
+
     // Czyszczenie przy odmontowaniu
     return () => {
       if (socket.current) {
@@ -51,6 +52,44 @@ function App() {
       }
     };
   }, []);
+
+  // Funkcja do wykrywania próby konfiguracji RTSP przez chat
+  useEffect(() => {
+    if (chatHistory.length === 0) return;
+    const lastMsg = chatHistory[chatHistory.length - 1];
+    if (lastMsg.type === 'user') {
+      // Prosta heurystyka: jeśli użytkownik pisze o RTSP, poproś o dane
+      if (/rtsp|kamera|stream|wideo|video|adres/i.test(lastMsg.text)) {
+        if (!rtspConfig || !rtspConfig.rtspUrl) {
+          setChatHistory(prev => [...prev, {
+            type: 'assistant',
+            text: 'Podaj adres RTSP streamu (np. rtsp://adres:port/ścieżka):'
+          }]);
+        } else if (!rtspConfig.username) {
+          setChatHistory(prev => [...prev, {
+            type: 'assistant',
+            text: 'Podaj nazwę użytkownika do streamu (jeśli wymagana, w przeciwnym razie napisz "brak"):'
+          }]);
+        } else if (!rtspConfig.password) {
+          setChatHistory(prev => [...prev, {
+            type: 'assistant',
+            text: 'Podaj hasło do streamu (jeśli wymagane, w przeciwnym razie napisz "brak"):'
+          }]);
+        }
+      }
+      // Automatyczne przechwytywanie odpowiedzi użytkownika
+      if (rtspConfig && !rtspConfig.rtspUrl && /^rtsp:\/\//i.test(lastMsg.text)) {
+        setRtspConfig({ ...rtspConfig, rtspUrl: lastMsg.text });
+        setChatHistory(prev => [...prev, { type: 'assistant', text: 'Podaj nazwę użytkownika do streamu (jeśli wymagana, w przeciwnym razie napisz "brak"):' }]);
+      } else if (rtspConfig && rtspConfig.rtspUrl && !rtspConfig.username && lastMsg.text.length < 32) {
+        setRtspConfig({ ...rtspConfig, username: lastMsg.text === 'brak' ? '' : lastMsg.text });
+        setChatHistory(prev => [...prev, { type: 'assistant', text: 'Podaj hasło do streamu (jeśli wymagane, w przeciwnym razie napisz "brak"):' }]);
+      } else if (rtspConfig && rtspConfig.rtspUrl && rtspConfig.username !== undefined && !rtspConfig.password && lastMsg.text.length < 64) {
+        setRtspConfig({ ...rtspConfig, password: lastMsg.text === 'brak' ? '' : lastMsg.text });
+        setChatHistory(prev => [...prev, { type: 'assistant', text: 'Konfiguracja RTSP została zapisana.' }]);
+      }
+    }
+  }, [chatHistory]);
 
   // Inicjalizacja nagrywania głosu
   const startListening = async () => {
@@ -127,50 +166,34 @@ function App() {
       }, 2000);
     }
   };
-  
+
+  // Przekaż konfigurację do ustawień, jeśli użytkownik ustawi przez chat lub GUI
+  const handleRTSPConfig = (config) => {
+    setRtspConfig(config);
+    setChatHistory(prev => [...prev, { type: 'assistant', text: 'Konfiguracja RTSP została zapisana.' }]);
+  };
+
   return (
     <div className="app-container">
       <div className="tabs">
-        <button 
-          className={activeTab === 'chat' ? 'active' : ''} 
-          onClick={() => setActiveTab('chat')}
-        >
-          VideoChat
-        </button>
-        <button 
-          className={activeTab === 'history' ? 'active' : ''} 
-          onClick={() => setActiveTab('history')}
-        >
-          Historia
-        </button>
-        <button 
-          className={activeTab === 'settings' ? 'active' : ''} 
-          onClick={() => setActiveTab('settings')}
-        >
-          Ustawienia
-        </button>
+        <button onClick={() => setActiveTab('chat')} className={activeTab === 'chat' ? 'active' : ''}>VideoChat</button>
+        <button onClick={() => setActiveTab('history')} className={activeTab === 'history' ? 'active' : ''}>Historia</button>
+        <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'active' : ''}>Ustawienia</button>
       </div>
-      
-      <div className="tab-content">
-        {activeTab === 'chat' && (
-          <VideoChat 
-            isListening={isListening}
-            isSpeaking={isSpeaking}
-            onStartListening={startListening}
-            latestMessage={chatHistory.length > 0 ? chatHistory[chatHistory.length - 1] : null}
-          />
-        )}
-        
-        {activeTab === 'history' && (
-          <ChatHistory 
-            messages={chatHistory}
-          />
-        )}
-        
-        {activeTab === 'settings' && (
-          <Settings />
-        )}
-      </div>
+      {activeTab === 'chat' && (
+        <VideoChat
+          isListening={isListening}
+          isSpeaking={isSpeaking}
+          onStartListening={startListening}
+          latestMessage={chatHistory[chatHistory.length - 1]}
+        />
+      )}
+      {activeTab === 'history' && (
+        <ChatHistory messages={chatHistory} />
+      )}
+      {activeTab === 'settings' && (
+        <Settings rtspConfig={rtspConfig} onRTSPConfigChange={handleRTSPConfig} />
+      )}
     </div>
   );
 }

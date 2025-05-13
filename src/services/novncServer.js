@@ -6,6 +6,26 @@ const fs = require('fs');
 const log = require('electron-log');
 const { app } = require('electron');
 
+// Komponenty HTML i CSS
+const htmlComponents = require('./novnc/htmlComponents');
+const cssStyles = require('./novnc/cssStyles');
+const clientScripts = require('./novnc/clientScripts');
+
+// Stałe i konfiguracja
+const CONFIG = {
+  DEFAULT_PORT: 6080,
+  FRAME_RATE: 250, // ms (4 klatki na sekundę)
+  MAX_PORT_ATTEMPTS: 10
+};
+
+// Typy animacji
+const ANIMATION_TYPES = {
+  IDLE: 'idle',
+  TALKING: 'talking',
+  LISTENING: 'listening',
+  THINKING: 'thinking'
+};
+
 class NoVNCServer {
   constructor(options = {}) {
     this.port = options.port || 6080;
@@ -17,6 +37,44 @@ class NoVNCServer {
     this.clients = new Set();
     this.currentAnimation = 'idle';
     this.isRunning = false;
+  }
+
+  // Funkcja do znajdowania dostępnego portu
+  findAvailablePort(startPort, maxAttempts = 10) {
+    return new Promise((resolve, reject) => {
+      let currentPort = startPort;
+      let attempts = 0;
+      
+      const tryPort = (port) => {
+        const testServer = http.createServer();
+        
+        testServer.once('error', (err) => {
+          if (err.code === 'EADDRINUSE') {
+            log.warn(`Port ${port} jest już zajęty, próbuję następny...`);
+            testServer.close();
+            
+            // Spróbuj następny port
+            if (attempts < maxAttempts) {
+              attempts++;
+              tryPort(port + 1);
+            } else {
+              reject(new Error(`Nie można znaleźć dostępnego portu po ${maxAttempts} próbach`));
+            }
+          } else {
+            reject(err);
+          }
+        });
+        
+        testServer.once('listening', () => {
+          testServer.close();
+          resolve(port);
+        });
+        
+        testServer.listen(port);
+      };
+      
+      tryPort(currentPort);
+    });
   }
 
   async initialize() {
@@ -31,6 +89,16 @@ class NoVNCServer {
         // Utwórz podstawowy plik vnc.html
         const vnchtmlPath = path.join(this.novncPath, 'vnc.html');
         fs.writeFileSync(vnchtmlPath, this.generateVncHtml());
+      }
+
+      // Znajdź dostępny port
+      try {
+        this.port = await this.findAvailablePort(this.port);
+        log.info(`Znaleziono dostępny port dla noVNC: ${this.port}`);
+      } catch (portError) {
+        log.error(`Błąd podczas szukania dostępnego portu: ${portError.message}`);
+        // Ustaw alternatywny port
+        this.port = 0; // Pozwól systemowi wybrać dowolny dostępny port
       }
 
       // Konfiguracja serwera HTTP do serwowania plików noVNC
@@ -101,10 +169,21 @@ class NoVNCServer {
         this.startSendingAsciiFrames(socket);
       });
 
-      // Uruchomienie serwera HTTP
-      this.httpServer.listen(this.port, () => {
-        log.info(`Serwer noVNC uruchomiony na porcie ${this.port}`);
-        this.isRunning = true;
+      // Uruchomienie serwera HTTP z obsługą błędów
+      return new Promise((resolve, reject) => {
+        this.httpServer.on('error', (err) => {
+          log.error(`Błąd podczas uruchamiania serwera noVNC: ${err.message}`);
+          reject(err);
+        });
+        
+        this.httpServer.listen(this.port, () => {
+          // Pobierz rzeczywisty port przydzielony przez system
+          const actualPort = this.httpServer.address().port;
+          this.port = actualPort;
+          log.info(`Serwer noVNC uruchomiony na porcie ${this.port}`);
+          this.isRunning = true;
+          resolve(true);
+        });
       });
 
       return true;
@@ -244,6 +323,10 @@ class NoVNCServer {
       width: 100%;
       height: 100%;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
     
     #ascii-container {
@@ -252,19 +335,59 @@ class NoVNCServer {
       justify-content: center;
       width: 100%;
       height: 100%;
-      font-size: 14px;
+      font-size: 24px;
       white-space: pre;
       text-align: center;
+      line-height: 1.2;
+      padding: 20px;
+      box-sizing: border-box;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 0.8; }
+      50% { opacity: 1; }
+      100% { opacity: 0.8; }
+    }
+    
+    .status {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      padding: 5px 10px;
+      background-color: rgba(80, 250, 123, 0.3);
+      border-radius: 4px;
+      font-size: 12px;
     }
   </style>
 </head>
 <body>
   <div id="ascii-container"></div>
+  <div class="status">Asystent VideoChat LLM</div>
   
   <script>
     // Połączenie WebSocket
     const socket = new WebSocket(\`ws://\${window.location.hostname}:\${window.location.port}\`);
     const container = document.getElementById('ascii-container');
+    
+    // Dostosuj rozmiar czcionki do rozmiaru okna
+    function adjustFontSize() {
+      const containerWidth = container.offsetWidth;
+      const containerHeight = container.offsetHeight;
+      
+      // Zakładamy, że ASCII art ma około 20 znaków szerokości i 12 linii wysokości
+      const idealCharWidth = containerWidth / 20;
+      const idealCharHeight = containerHeight / 12;
+      
+      // Wybierz mniejszą wartość, aby zapewnić, że cały ASCII art będzie widoczny
+      const fontSize = Math.min(idealCharWidth, idealCharHeight * 2);
+      
+      container.style.fontSize = '\' + fontSize + 'px';
+    }
+    
+    // Dostosuj rozmiar przy ładowaniu i zmianie rozmiaru okna
+    window.addEventListener('load', adjustFontSize);
+    window.addEventListener('resize', adjustFontSize);
     
     // Obsługa wiadomości
     socket.addEventListener('message', (event) => {
@@ -273,6 +396,7 @@ class NoVNCServer {
         
         if (data.type === 'ascii-frame') {
           container.textContent = data.frame;
+          adjustFontSize();
         }
       } catch (error) {
         console.error('Błąd przetwarzania wiadomości:', error);

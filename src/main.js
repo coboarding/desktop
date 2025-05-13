@@ -18,12 +18,6 @@ const AsciiGenerator = require('./services/asciifier');
 const appPath = app.getAppPath();
 const modelsPath = path.join(appPath, 'models');
 
-// Importy lokalnych serwisów
-const LLMService = require('./services/llm');
-const STTService = require('./services/stt');
-const TTSService = require('./services/tts');
-const K3sManager = require('./infrastructure/k3s');
-
 // Zmienne globalne
 let mainWindow = null;
 let expressApp = null;
@@ -101,6 +95,22 @@ const setupExpressServer = () => {
   
   // Ścieżka statyczna dla zasobów
   expressApp.use(express.static(path.join(__dirname, 'renderer')));
+  
+  // Dodaj specyficzną trasę dla strony głównej
+  expressApp.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'renderer', 'index.html'));
+  });
+  
+  // Dodaj trasę dla VNC
+  expressApp.get('/vnc.html', (req, res) => {
+    res.sendFile(path.join(appPath, 'vendor/novnc/vnc.html'));
+  });
+  
+  // Dodaj endpoint do pobrania aktualnego portu noVNC
+  expressApp.get('/api/novnc-port', (req, res) => {
+    const novncPort = novncServer ? novncServer.port : null;
+    res.json({ port: novncPort });
+  });
   
   // Obsługa Socket.IO
   io.on('connection', (socket) => {
@@ -207,8 +217,12 @@ app.whenReady().then(async () => {
   // Konfiguracja serwera Express
   setupExpressServer();
   
-  // Utworzenie okna po inicjalizacji
-  createWindow();
+  // Poczekaj na uruchomienie serwera przed utworzeniem okna
+  httpServer.on('listening', () => {
+    // Tworzenie okna aplikacji po uruchomieniu serwera
+    createWindow();
+    log.info('Okno aplikacji utworzone po uruchomieniu serwera');
+  });
 });
 
 // Obsługa IPC do komunikacji między procesami
