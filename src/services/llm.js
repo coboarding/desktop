@@ -228,10 +228,6 @@ class LLMService {
    */
   _generateFallbackResponse(text) {
     return `Przepraszam, ale miałem problem z przetworzeniem Twojej wypowiedzi. Czy możesz powtórzyć lub sformułować to inaczej?`;
-    } catch (error) {
-      log.error('Błąd przetwarzania tekstu przez LLM:', error);
-      throw error;
-    }
   }
 }
 

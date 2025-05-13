@@ -81,6 +81,38 @@ function getMainStyles() {
       height: 0;
       padding: 0;
     }
+    
+    /* Permission button styles */
+    .permission-button {
+      display: block;
+      margin: 10px auto;
+      padding: 10px 15px;
+      background-color: #ff5555;
+      color: #f8f8f2;
+      border: none;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      animation: pulse-attention 2s infinite;
+    }
+    
+    .permission-button:hover {
+      background-color: #ff6e6e;
+      transform: scale(1.05);
+    }
+    
+    .permission-button:active {
+      background-color: #e64747;
+      transform: scale(0.98);
+    }
+    
+    @keyframes pulse-attention {
+      0% { box-shadow: 0 0 0 0 rgba(255, 85, 85, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(255, 85, 85, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 85, 85, 0); }
+    }
   `;
 }
 

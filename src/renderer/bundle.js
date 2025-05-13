@@ -231,10 +231,39 @@ document.addEventListener('DOMContentLoaded', () => {
   // Function to start audio recording with Web Speech API
   async function startRecording() {
     try {
+      // Najpierw sprawdź, czy użytkownik ma uprawnienia do mikrofonu
+      try {
+        // Najpierw proś o uprawnienia do mikrofonu
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // Jeśli jesteśmy tutaj, to znaczy, że uprawnienia zostały przyznane
+        // Zatrzymaj strumień, ponieważ będziemy go używać w inny sposób
+        stream.getTracks().forEach(track => track.stop());
+        
+        // Dodaj informację dla użytkownika
+        addMessage('system', 'Dostęp do mikrofonu został przyznany. Rozpoczynam nasłuchiwanie...');
+      } catch (permissionError) {
+        console.error('Błąd uprawnień mikrofonu:', permissionError);
+        addMessage('system', 'Brak dostępu do mikrofonu. Kliknij ikonkę kłódki w pasku adresu i zezwól na dostęp do mikrofonu.');
+        
+        // Dodaj przycisk do ponownego żądania uprawnień
+        const permissionBtn = document.createElement('button');
+        permissionBtn.textContent = 'Przyznaj dostęp do mikrofonu';
+        permissionBtn.className = 'permission-button';
+        permissionBtn.onclick = () => {
+          // Usuń przycisk
+          permissionBtn.remove();
+          // Spróbuj ponownie
+          startRecording();
+        };
+        document.getElementById('chat-history').appendChild(permissionBtn);
+        return;
+      }
+      
       // Sprawdzenie czy przeglądarka obsługuje Web Speech API
       if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
         console.error('Web Speech API nie jest obsługiwana w tej przeglądarce');
-        addMessage('system', 'Twoja przeglądarka nie obsługuje rozpoznawania mowy. Spróbuj użyć Chrome.');
+        addMessage('system', 'Twoja przeglądarka nie obsługuje rozpoznawania mowy. Spróbuj użyć Chrome lub Edge.');
         
         // Fallback do zwykłego nagrywania audio
         startFallbackRecording();
@@ -260,6 +289,9 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
             finalTranscript += event.results[i][0].transcript;
+            
+            // Pokaż rozpoznany tekst w interfejsie
+            addMessage('user', finalTranscript.trim());
             
             // Wyślij transkrypcję do serwera
             const transcriptData = {
@@ -290,8 +322,36 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Błąd rozpoznawania mowy:', event.error);
         if (event.error === 'no-speech') {
           console.log('Nie wykryto mowy');
+        } else if (event.error === 'not-allowed') {
+          addMessage('system', 'Brak dostępu do mikrofonu. Kliknij ikonkę kłódki w pasku adresu i zezwól na dostęp do mikrofonu.');
+          
+          // Dodaj przycisk do ponownego żądania uprawnień
+          const permissionBtn = document.createElement('button');
+          permissionBtn.textContent = 'Przyznaj dostęp do mikrofonu';
+          permissionBtn.className = 'permission-button';
+          permissionBtn.onclick = () => {
+            // Usuń przycisk
+            permissionBtn.remove();
+            // Spróbuj ponownie
+            startRecording();
+          };
+          document.getElementById('chat-history').appendChild(permissionBtn);
         } else {
           addMessage('system', `Błąd rozpoznawania mowy: ${event.error}`);
+        }
+      };
+      
+      // Obsługa zakończenia rozpoznawania
+      recognition.onend = () => {
+        console.log('Rozpoznawanie mowy zakończone');
+        // Jeśli nadal powinniśmy nagrywać, uruchom ponownie
+        if (isRecording) {
+          try {
+            recognition.start();
+            console.log('Ponowne uruchomienie rozpoznawania mowy');
+          } catch (e) {
+            console.error('Błąd przy ponownym uruchomieniu rozpoznawania:', e);
+          }
         }
       };
       
@@ -316,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
       addMessage('system', 'Mikrofon aktywny - mów wyraźnie po polsku');
     } catch (error) {
       console.error('Błąd dostępu do mikrofonu:', error);
-      addMessage('system', 'Błąd dostępu do mikrofonu. Sprawdź uprawnienia.');
+      addMessage('system', 'Błąd dostępu do mikrofonu. Sprawdź uprawnienia i odśwież stronę.');
       
       // Fallback do zwykłego nagrywania
       startFallbackRecording();
@@ -326,14 +386,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fallback do zwykłego nagrywania audio (gdy Web Speech API nie jest dostępne)
   async function startFallbackRecording() {
     try {
+      // Dodaj informację dla użytkownika
+      addMessage('system', 'Próba uruchomienia trybu awaryjnego nagrywania...');
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorder = new MediaRecorder(stream);
       
+      // Dodaj obsługę zatrzymania nagrywania, gdy strona jest zamykana
+      window.addEventListener('beforeunload', () => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
+          stream.getTracks().forEach(track => track.stop());
+        }
+      });
+      
+      // Obsługa dostępnych danych audio
       mediaRecorder.addEventListener('dataavailable', event => {
         if (event.data.size > 0) {
           audioChunks.push(event.data);
           
-          // Send audio data to server
+          // Pokaż wizualną informację o nagrywaniu
+          const volumeIndicator = document.getElementById('volume-indicator') || createVolumeIndicator();
+          pulseVolumeIndicator(volumeIndicator);
+          
+          // Wyślij dane audio do serwera
           const audioBlob = new Blob(audioChunks);
           const reader = new FileReader();
           reader.onloadend = () => {
@@ -345,18 +421,62 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
       
-      mediaRecorder.start(1000); // Capture in 1-second intervals
+      // Obsługa błędów
+      mediaRecorder.addEventListener('error', error => {
+        console.error('Błąd MediaRecorder:', error);
+        addMessage('system', `Błąd nagrywania: ${error.message || 'Nieznany błąd'}`);
+      });
+      
+      // Rozpocznij nagrywanie
+      mediaRecorder.start(1000); // Nagrywaj w 1-sekundowych interwałach
       isRecording = true;
       startBtn.disabled = true;
       stopBtn.disabled = false;
-      console.log('Started recording in fallback mode');
+      console.log('Rozpoczęto nagrywanie w trybie awaryjnym');
       
-      // Update UI to show recording is active
+      // Aktualizacja interfejsu
       addMessage('system', 'Mikrofon aktywny w trybie awaryjnym - mowa będzie rozpoznawana na serwerze');
     } catch (error) {
-      console.error('Error accessing microphone:', error);
-      addMessage('system', 'Błąd dostępu do mikrofonu. Sprawdź uprawnienia.');
+      console.error('Błąd dostępu do mikrofonu:', error);
+      
+      // Sprawdź rodzaj błędu
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        addMessage('system', 'Brak dostępu do mikrofonu. Kliknij ikonkę kłódki w pasku adresu i zezwól na dostęp do mikrofonu.');
+        
+        // Dodaj przycisk do ponownego żądania uprawnień
+        const permissionBtn = document.createElement('button');
+        permissionBtn.textContent = 'Przyznaj dostęp do mikrofonu';
+        permissionBtn.className = 'permission-button';
+        permissionBtn.onclick = () => {
+          // Usuń przycisk
+          permissionBtn.remove();
+          // Spróbuj ponownie
+          startFallbackRecording();
+        };
+        document.getElementById('chat-history').appendChild(permissionBtn);
+      } else if (error.name === 'NotFoundError') {
+        addMessage('system', 'Nie znaleziono urządzenia audio. Sprawdź, czy mikrofon jest podłączony.');
+      } else {
+        addMessage('system', `Błąd dostępu do mikrofonu: ${error.message || error.name || 'Nieznany błąd'}`);
+      }
     }
+  }
+  
+  // Funkcja tworząca wskaźnik głośności
+  function createVolumeIndicator() {
+    const indicator = document.createElement('div');
+    indicator.id = 'volume-indicator';
+    indicator.className = 'volume-indicator';
+    document.getElementById('chat-history').appendChild(indicator);
+    return indicator;
+  }
+  
+  // Funkcja pulsująca wskaźnik głośności
+  function pulseVolumeIndicator(indicator) {
+    indicator.classList.add('pulse');
+    setTimeout(() => {
+      indicator.classList.remove('pulse');
+    }, 200);
   }
   
   // Function to stop recording
