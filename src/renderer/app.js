@@ -91,6 +91,29 @@ function App() {
     }
   }, [chatHistory]);
 
+  // Automatyczne uruchamianie nasłuchiwania audio po starcie aplikacji
+  useEffect(() => {
+    // Spróbuj wystartować mikrofon od razu po uruchomieniu
+    startListening();
+    // eslint-disable-next-line
+  }, []);
+
+  // Automatyczna wiadomość głosowa od bota po starcie aplikacji
+  useEffect(() => {
+    // Poczekaj aż mikrofon się uruchomi i odtwórz powitanie
+    const timer = setTimeout(() => {
+      const welcomeMsg = 'Witaj! Jestem Twoim asystentem. Możesz od razu zadawać pytania głosowo.';
+      setChatHistory(prev => [...prev, { type: 'assistant', text: welcomeMsg }]);
+      // Odtwarzanie głosowe (TTS)
+      if ('speechSynthesis' in window) {
+        const utter = new window.SpeechSynthesisUtterance(welcomeMsg);
+        utter.lang = 'pl-PL';
+        window.speechSynthesis.speak(utter);
+      }
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Inicjalizacja nagrywania głosu
   const startListening = async () => {
     try {

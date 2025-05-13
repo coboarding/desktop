@@ -51,365 +51,322 @@ class NoVNCServer {
     return networkUtils.findAvailablePort(startPort, maxAttempts);
   }
 
+  /**
+   * Inicjalizacja serwera noVNC
+   * @returns {Promise<boolean>} - Promise zwracający true jeśli inicjalizacja się powiodła
+   */
   async initialize() {
     try {
       log.info('Inicjalizacja serwera noVNC...');
       
-      // Sprawdź, czy katalog noVNC istnieje
-      if (!fs.existsSync(this.novncPath)) {
-        log.info('Katalog noVNC nie istnieje, tworzenie...');
-        fs.mkdirSync(this.novncPath, { recursive: true });
-        
-        // Utwórz podstawowy plik vnc.html
-        const vnchtmlPath = path.join(this.novncPath, 'vnc.html');
-        fs.writeFileSync(vnchtmlPath, this.generateVncHtml());
-      }
+      // Przygotuj katalog i pliki noVNC
+      await this._prepareNoVNCDirectory();
 
       // Znajdź dostępny port
-      try {
-        this.port = await this.findAvailablePort(this.port);
-        log.info(`Znaleziono dostępny port dla noVNC: ${this.port}`);
-      } catch (portError) {
-        log.error(`Błąd podczas szukania dostępnego portu: ${portError.message}`);
-        // Ustaw alternatywny port
-        this.port = 0; // Pozwól systemowi wybrać dowolny dostępny port
-      }
+      await this._setupPort();
 
-      // Konfiguracja serwera HTTP do serwowania plików noVNC
-      this.httpServer = http.createServer((req, res) => {
-        // Prosty serwer plików dla noVNC
-        let filePath = '';
+      // Konfiguracja serwera HTTP
+      this._setupHttpServer();
 
-        if (req.url === '/') {
-          filePath = path.join(this.novncPath, 'vnc.html');
-        } else {
-          filePath = path.join(this.novncPath, req.url);
-        }
+      // Konfiguracja serwera WebSocket
+      this._setupWebSocketServer();
 
-        fs.readFile(filePath, (err, data) => {
-          if (err) {
-            res.writeHead(404);
-            res.end(JSON.stringify(err));
-            return;
-          }
-
-          // Określ typ MIME na podstawie rozszerzenia pliku
-          const ext = path.extname(filePath);
-          let contentType = 'text/html';
-
-          switch (ext) {
-            case '.js':
-              contentType = 'text/javascript';
-              break;
-            case '.css':
-              contentType = 'text/css';
-              break;
-            case '.json':
-              contentType = 'application/json';
-              break;
-            case '.png':
-              contentType = 'image/png';
-              break;
-            case '.jpg':
-              contentType = 'image/jpeg';
-              break;
-          }
-
-          res.writeHead(200, { 'Content-Type': contentType });
-          res.end(data);
-        });
-      });
-
-      // Konfiguracja serwera WebSocket dla noVNC
-      this.webSocketServer = new WebSocket.Server({
-        server: this.httpServer
-      });
-
-      this.webSocketServer.on('connection', (socket) => {
-        log.info('Nowe połączenie WebSocket z noVNC');
-        this.clients.add(socket);
-
-        socket.on('message', (message) => {
-          // Obsługa wiadomości od klienta
-          log.info(`Wiadomość od klienta noVNC: ${message}`);
-        });
-
-        socket.on('close', () => {
-          this.clients.delete(socket);
-          log.info('Klient noVNC rozłączony');
-        });
-
-        // Rozpocznij wysyłanie animacji ASCII
-        this.startSendingAsciiFrames(socket);
-      });
-
-      // Uruchomienie serwera HTTP z obsługą błędów
-      return new Promise((resolve, reject) => {
-        this.httpServer.on('error', (err) => {
-          log.error(`Błąd podczas uruchamiania serwera noVNC: ${err.message}`);
-          reject(err);
-        });
-        
-        this.httpServer.listen(this.port, () => {
-          // Pobierz rzeczywisty port przydzielony przez system
-          const actualPort = this.httpServer.address().port;
-          this.port = actualPort;
-          log.info(`Serwer noVNC uruchomiony na porcie ${this.port}`);
-          this.isRunning = true;
-          resolve(true);
-        });
-      });
-
+      // Uruchomienie serwera
+      await this._startServer();
+      
       return true;
     } catch (error) {
       log.error('Błąd inicjalizacji serwera noVNC:', error);
       return false;
     }
   }
+  
+  /**
+   * Przygotowanie katalogu noVNC i plików
+   * @private
+   */
+  async _prepareNoVNCDirectory() {
+    if (!fs.existsSync(this.novncPath)) {
+      log.info('Katalog noVNC nie istnieje, tworzenie...');
+      fs.mkdirSync(this.novncPath, { recursive: true });
+      
+      // Utwórz podstawowy plik vnc.html
+      const vnchtmlPath = path.join(this.novncPath, 'vnc.html');
+      fs.writeFileSync(vnchtmlPath, this._generateVncHtml());
+    }
+  }
+  
+  /**
+   * Konfiguracja portu dla serwera
+   * @private
+   */
+  async _setupPort() {
+    try {
+      this.port = await this.findAvailablePort(this.port, this.config.maxPortAttempts);
+      log.info(`Znaleziono dostępny port dla noVNC: ${this.port}`);
+    } catch (portError) {
+      log.error(`Błąd podczas szukania dostępnego portu: ${portError.message}`);
+      // Ustaw alternatywny port
+      this.port = 0; // Pozwól systemowi wybrać dowolny dostępny port
+    }
+  }
+  
+  /**
+   * Konfiguracja serwera HTTP
+   * @private
+   */
+  _setupHttpServer() {
+    this.httpServer = http.createServer(this._handleHttpRequest.bind(this));
+  }
+  
+  /**
+   * Obsługa żądań HTTP
+   * @private
+   */
+  _handleHttpRequest(req, res) {
+    // Prosty serwer plików dla noVNC
+    let filePath = '';
 
+    if (req.url === '/') {
+      filePath = path.join(this.novncPath, 'vnc.html');
+    } else {
+      filePath = path.join(this.novncPath, req.url);
+    }
+
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        res.writeHead(404);
+        res.end(JSON.stringify(err));
+        return;
+      }
+
+      // Określ typ MIME na podstawie rozszerzenia pliku
+      const ext = path.extname(filePath);
+      let contentType = 'text/html';
+
+      switch (ext) {
+        case '.js':
+          contentType = 'text/javascript';
+          break;
+        case '.css':
+          contentType = 'text/css';
+          break;
+        case '.json':
+          contentType = 'application/json';
+          break;
+        case '.png':
+          contentType = 'image/png';
+          break;
+        case '.jpg':
+          contentType = 'image/jpeg';
+          break;
+      }
+
+      res.writeHead(200, { 'Content-Type': contentType });
+      res.end(data);
+    });
+  }
+  
+  /**
+   * Konfiguracja serwera WebSocket
+   * @private
+   */
+  _setupWebSocketServer() {
+    this.webSocketServer = new WebSocket.Server({
+      server: this.httpServer
+    });
+
+    this.webSocketServer.on('connection', this._handleWebSocketConnection.bind(this));
+  }
+  
+  /**
+   * Obsługa nowych połączeń WebSocket
+   * @private
+   */
+  _handleWebSocketConnection(socket) {
+    log.info('Nowe połączenie WebSocket z noVNC');
+    this.clients.add(socket);
+
+    socket.on('message', (message) => {
+      this._handleWebSocketMessage(socket, message);
+    });
+
+    socket.on('close', () => {
+      this.clients.delete(socket);
+      log.info('Klient noVNC rozłączony');
+    });
+
+    // Rozpocznij wysyłanie animacji ASCII
+    this.startSendingAsciiFrames(socket);
+  }
+  
+  /**
+   * Obsługa wiadomości WebSocket
+   * @private
+   */
+  _handleWebSocketMessage(socket, message) {
+    try {
+      const data = JSON.parse(message);
+      
+      if (data.type === 'control-animation' && data.animationType) {
+        this.setAnimation(data.animationType);
+      }
+      
+      log.info(`Wiadomość od klienta noVNC: ${message}`);
+    } catch (error) {
+      log.error(`Błąd przetwarzania wiadomości WebSocket: ${error}`);
+    }
+  }
+  
+  /**
+   * Uruchomienie serwera HTTP
+   * @private
+   */
+  async _startServer() {
+    const networkUtils = require('./novnc/networkUtils');
+    
+    return new Promise((resolve, reject) => {
+      this.httpServer.on('error', (err) => {
+        log.error(`Błąd podczas uruchamiania serwera noVNC: ${err.message}`);
+        reject(err);
+      });
+      
+      this.httpServer.listen(this.port, () => {
+        // Pobierz rzeczywisty port przydzielony przez system
+        const actualPort = this.httpServer.address().port;
+        this.port = actualPort;
+        log.info(`Serwer noVNC uruchomiony na porcie ${this.port}`);
+        this.isRunning = true;
+        resolve(true);
+      });
+    });
+  }
+
+  /**
+   * Ustawia typ animacji ASCII
+   * @param {string} animationType - Typ animacji do ustawienia
+   */
   setAnimation(animationType) {
     if (this.currentAnimation !== animationType) {
       log.info(`Zmiana animacji ASCII na: ${animationType}`);
       this.currentAnimation = animationType;
+      
+      // Powiadom wszystkich klientów o zmianie animacji
+      this._notifyClientsAboutAnimationChange(animationType);
     }
   }
-
-  async startSendingAsciiFrames(socket) {
-    // Funkcja generująca klatki animacji ASCII
-    const generateAsciiFrame = () => {
-      // Pobierz odpowiednią animację na podstawie stanu
-      const animationPath = path.join(
-        this.appPath,
-        `src/ascii-animations/${this.currentAnimation}.txt`
-      );
-
-      try {
-        // W prostej implementacji wczytujemy gotowe klatki
-        if (fs.existsSync(animationPath)) {
-          let frames = fs.readFileSync(animationPath, 'utf-8').split('FRAME');
-          // Usuń puste klatki
-          frames = frames.filter(frame => frame.trim().length > 0);
-
-          // Wybierz losową klatkę (lub sekwencyjnie w bardziej złożonej implementacji)
-          const frameIndex = Math.floor(Math.random() * frames.length);
-          return frames[frameIndex] || this.generateDefaultFrame();
-        } else {
-          return this.generateDefaultFrame();
-        }
-      } catch (error) {
-        log.error(`Błąd generowania klatki ASCII: ${error}`);
-        return this.generateDefaultFrame();
+  
+  /**
+   * Powiadamia wszystkich klientów o zmianie animacji
+   * @private
+   * @param {string} animationType - Nowy typ animacji
+   */
+  _notifyClientsAboutAnimationChange(animationType) {
+    this.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({
+          type: 'animation-change',
+          animationType: animationType
+        }));
       }
-    };
+    });
+  }
 
+  /**
+   * Rozpoczyna wysyłanie klatek animacji ASCII do klienta
+   * @param {WebSocket} socket - Połączenie WebSocket klienta
+   */
+  async startSendingAsciiFrames(socket) {
+    const asciiAnimations = require('./novnc/asciiAnimations');
+    
     // Pętla wysyłająca klatki
     const sendFrames = () => {
       if (socket.readyState === WebSocket.OPEN) {
-        const frame = generateAsciiFrame();
+        const frame = this._generateAsciiFrame();
         socket.send(JSON.stringify({
           type: 'ascii-frame',
           frame: frame
         }));
 
-        setTimeout(sendFrames, 250); // 4 klatki na sekundę
+        setTimeout(sendFrames, this.config.frameRate);
       }
     };
 
     // Rozpocznij wysyłanie klatek
     sendFrames();
   }
-
-  // Domyślna animacja, gdy brak pliku
-  generateDefaultFrame() {
-    const states = {
-      idle: `
-   +----------------+
-   |                |
-   |    /\\    /\\    |
-   |   /  \\  /  \\   |
-   |  |    ||    |  |
-   |  |    ||    |  |
-   |   \\__/  \\__/   |
-   |                |
-   |      ----      |
-   |                |
-   +----------------+
-        `,
-      talking: `
-   +----------------+
-   |                |
-   |    /\\    /\\    |
-   |   /  \\  /  \\   |
-   |  |    ||    |  |
-   |  |    ||    |  |
-   |   \\__/  \\__/   |
-   |                |
-   |      ====      |
-   |                |
-   +----------------+
-        `,
-      listening: `
-   +----------------+
-   |                |
-   |    /\\    /\\    |
-   |   /  \\  /  \\   |
-   |  |    ||    |  |
-   |  |    ||    |  |
-   |   \\__/  \\__/   |
-   |                |
-   |      ....      |
-   |                |
-   +----------------+
-        `,
-      thinking: `
-   +----------------+
-   |                |
-   |    /\\    /\\    |
-   |   /  \\  /  \\   |
-   |  |    ||    |  |
-   |  |    ||    |  |
-   |   \\__/  \\__/   |
-   |                |
-   |      ????      |
-   |                |
-   +----------------+
-        `
-    };
-
-    return states[this.currentAnimation] || states.idle;
+  
+  /**
+   * Generuje klatkę animacji ASCII
+   * @private
+   * @returns {string} - Klatka animacji ASCII
+   */
+  _generateAsciiFrame() {
+    const asciiAnimations = require('./novnc/asciiAnimations');
+    return asciiAnimations.getAnimationFrame(this.appPath, this.currentAnimation);
   }
 
-  // Generowanie pliku HTML dla noVNC
-  generateVncHtml() {
-    return `<!DOCTYPE html>
-<html lang="pl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ASCII Animation</title>
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      background-color: #282a36;
-      color: #50fa7b;
-      font-family: 'Courier New', monospace;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    #ascii-container {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      height: 100%;
-      font-size: 24px;
-      white-space: pre;
-      text-align: center;
-      line-height: 1.2;
-      padding: 20px;
-      box-sizing: border-box;
-      animation: pulse 2s infinite;
-    }
-    
-    @keyframes pulse {
-      0% { opacity: 0.8; }
-      50% { opacity: 1; }
-      100% { opacity: 0.8; }
-    }
-    
-    .status {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      padding: 5px 10px;
-      background-color: rgba(80, 250, 123, 0.3);
-      border-radius: 4px;
-      font-size: 12px;
-    }
-  </style>
-</head>
-<body>
-  <div id="ascii-container"></div>
-  <div class="status">Asystent VideoChat LLM</div>
-  
-  <script>
-    // Połączenie WebSocket
-    const socket = new WebSocket(\`ws://\${window.location.hostname}:\${window.location.port}\`);
-    const container = document.getElementById('ascii-container');
-    
-    // Dostosuj rozmiar czcionki do rozmiaru okna
-    function adjustFontSize() {
-      const containerWidth = container.offsetWidth;
-      const containerHeight = container.offsetHeight;
-      
-      // Zakładamy, że ASCII art ma około 20 znaków szerokości i 12 linii wysokości
-      const idealCharWidth = containerWidth / 20;
-      const idealCharHeight = containerHeight / 12;
-      
-      // Wybierz mniejszą wartość, aby zapewnić, że cały ASCII art będzie widoczny
-      const fontSize = Math.min(idealCharWidth, idealCharHeight * 2);
-      
-      container.style.fontSize = '\' + fontSize + 'px';
-    }
-    
-    // Dostosuj rozmiar przy ładowaniu i zmianie rozmiaru okna
-    window.addEventListener('load', adjustFontSize);
-    window.addEventListener('resize', adjustFontSize);
-    
-    // Obsługa wiadomości
-    socket.addEventListener('message', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'ascii-frame') {
-          container.textContent = data.frame;
-          adjustFontSize();
-        }
-      } catch (error) {
-        console.error('Błąd przetwarzania wiadomości:', error);
-      }
-    });
-    
-    // Obsługa błędów
-    socket.addEventListener('error', (error) => {
-      console.error('Błąd WebSocket:', error);
-    });
-    
-    socket.addEventListener('close', () => {
-      console.log('Połączenie WebSocket zamknięte');
-      container.textContent = 'Połączenie przerwane. Odświeżyć stronę?';
-    });
-  </script>
-</body>
-</html>`;
+  /**
+   * Generuje HTML dla interfejsu noVNC
+   * @private
+   * @returns {string} - Kod HTML dla interfejsu noVNC
+   */
+  _generateVncHtml() {
+    return htmlComponents.generateMainHtml();
   }
   
+  /**
+   * Zatrzymuje serwer noVNC
+   * @returns {Promise<boolean>} - Promise zwracający true jeśli zatrzymanie się powiodło
+   */
   async stop() {
     if (this.isRunning) {
       log.info('Zatrzymywanie serwera noVNC...');
       
       // Zamknij wszystkie połączenia WebSocket
-      for (const client of this.clients) {
-        client.close();
-      }
+      this._closeAllConnections();
       
-      // Zamknij serwer HTTP
-      if (this.httpServer) {
-        this.httpServer.close();
-      }
+      // Zatrzymaj serwer HTTP
+      await this._stopHttpServer();
       
       this.isRunning = false;
-      log.info('Serwer noVNC zatrzymany');
+      return true;
     }
     
-    return true;
+    return false;
+  }
+  
+  /**
+   * Zamyka wszystkie połączenia WebSocket
+   * @private
+   */
+  _closeAllConnections() {
+    this.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.close();
+      }
+    });
+    
+    // Wyczyść zbiór klientów
+    this.clients.clear();
+  }
+  
+  /**
+   * Zatrzymuje serwer HTTP
+   * @private
+   * @returns {Promise<void>}
+   */
+  async _stopHttpServer() {
+    if (this.httpServer) {
+      return new Promise(resolve => {
+        this.httpServer.close(() => {
+          log.info('Serwer HTTP noVNC zatrzymany');
+          resolve();
+        });
+      });
+    }
+    
+    return Promise.resolve();
   }
 }
 
