@@ -289,11 +289,33 @@ document.addEventListener('DOMContentLoaded', () => {
   let mediaRecorder = null;
   let audioChunks = [];
   
+  // Flaga wskazująca, czy jesteśmy już w trybie offline
+  let isOfflineMode = false;
+  
   // Function to handle offline mode for speech recognition
   async function handleOfflineMode() {
+    // Jeśli już jesteśmy w trybie offline, nie rób nic
+    if (isOfflineMode) {
+      console.log('Już jesteśmy w trybie offline, pomijam');
+      return;
+    }
+    
+    // Ustaw flagę trybu offline
+    isOfflineMode = true;
+    
     console.log('Przechodzenie do trybu offline dla rozpoznawania mowy');
     // Informuj użytkownika o trybie offline
     addMessage('system', 'Przechodzenie do trybu offline. Możesz użyć przycisków komend zamiast mowy.');
+    
+    // Zatrzymaj wszystkie próby rozpoznawania mowy
+    if (window.currentRecognition) {
+      try {
+        window.currentRecognition.abort();
+        window.currentRecognition = null;
+      } catch (error) {
+        console.error('Błąd zatrzymywania rozpoznawania mowy:', error);
+      }
+    }
     
     // Wyświetl przyciski komend bardziej widocznie
     const commandButtons = document.querySelectorAll('.command-btn');
@@ -354,6 +376,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Inicjalizacja Web Speech API
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
+      
+      // Zapisz referencję do obiektu rozpoznawania mowy globalnie, aby można było go zatrzymać i uruchomić ponownie
+      window.currentRecognition = recognition;
       
       // Konfiguracja
       recognition.lang = 'pl-PL';
@@ -417,18 +442,27 @@ document.addEventListener('DOMContentLoaded', () => {
           };
           document.getElementById('chat-history').appendChild(permissionBtn);
         } else if (event.error === 'network') {
-          // Błąd sieci - spróbuj ponownie po krótkiej przerwie
-          addMessage('system', 'Wystąpił problem z połączeniem sieciowym. Spróbuję ponownie za chwilę...');
+          // Błąd sieci - przejdź do trybu offline
+          console.log('Błąd sieci w rozpoznawaniu mowy');
           
-          // Zatrzymaj obecne rozpoznawanie
-          recognition.stop();
-          
-          // Spróbuj ponownie po krótkiej przerwie
-          setTimeout(() => {
-            console.log('Ponowna próba po błędzie sieci');
-            // Spróbuj ponownie z normalnym trybem
-            startRecording();
-          }, 2000);
+          // Jeśli nie jesteśmy jeszcze w trybie offline, poinformuj użytkownika
+          if (!isOfflineMode) {
+            addMessage('system', 'Wystąpił problem z połączeniem sieciowym. Przechodzenie do trybu offline...');
+            
+            // Zatrzymaj obecne rozpoznawanie
+            try {
+              recognition.abort();
+            } catch (error) {
+              console.error('Błąd zatrzymywania rozpoznawania mowy:', error);
+            }
+            
+            // Przejdź do trybu offline
+            setTimeout(() => {
+              console.log('Przechodzenie do trybu offline po błędzie sieci');
+              // Aktywuj tryb offline
+              handleOfflineMode();
+            }, 500);
+          }
           
           return;
         } else {
@@ -605,8 +639,16 @@ document.addEventListener('DOMContentLoaded', () => {
   function handleCommandButtonClick(event) {
     const command = event.target.getAttribute('data-command');
     if (command) {
+      console.log(`Kliknięto przycisk komendy: ${command}`);
+      
       // Dodaj komendę do historii czatu jako wiadomość użytkownika
       addMessage('user', command);
+      
+      // Zatrzymaj rozpoznawanie mowy na czas wykonywania komendy
+      if (window.currentRecognition) {
+        console.log('Zatrzymywanie rozpoznawania mowy na czas wykonywania komendy');
+        window.currentRecognition.stop();
+      }
       
       // Wyślij komendę do serwera jako transkrypcję mowy
       socket.emit('web-stt-result', { transcript: command });
@@ -622,7 +664,17 @@ document.addEventListener('DOMContentLoaded', () => {
         commandButtons.forEach(btn => {
           btn.disabled = false;
         });
-      }, 2000);
+        
+        // Wznowienie rozpoznawania mowy po wykonaniu komendy
+        if (isRecording && window.currentRecognition) {
+          console.log('Wznawianie rozpoznawania mowy po wykonaniu komendy');
+          try {
+            startRecording();
+          } catch (error) {
+            console.error('Błąd wznawiania rozpoznawania mowy:', error);
+          }
+        }
+      }, 3000);
     }
   }
   

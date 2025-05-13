@@ -7,41 +7,23 @@ function SpeechControls({
   onStartListening, 
   onStartWebSpeech 
 }) {
-  // Obsługa kliknięcia przycisku mikrofonu
-  const handleMicButtonClick = () => {
-    if (isListening || isSpeaking || webSpeechActive) {
-      return; // Nie rób nic, jeśli już słuchamy lub mówimy
-    }
-    
-    // Sprawdź, czy Web Speech API jest dostępne
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      console.log('Używam Web Speech API');
-      if (typeof onStartWebSpeech === 'function') {
-        onStartWebSpeech();
-      }
-    } else {
-      console.log('Web Speech API niedostępne, używam standardowego mikrofonu');
-      if (typeof onStartListening === 'function') {
-        onStartListening();
-      }
-    }
-  };
-
   return (
     <div className="speech-controls">
-      <button 
-        className="mic-button"
-        onClick={handleMicButtonClick}
-        disabled={isListening || isSpeaking || webSpeechActive}
-      >
-        <span className="mic-icon">🎤</span>
-        {isListening || webSpeechActive ? 'Słucham...' : 'Naciśnij, aby mówić'}
-        {(isListening || webSpeechActive) && <div className="listening-indicator"></div>}
-      </button>
-      <div className="speech-status">
-        {webSpeechActive && <span className="web-speech-badge">Web Speech API</span>}
-        {isListening && !webSpeechActive && <span className="web-speech-badge">Mikrofon</span>}
-        {isSpeaking && <span className="web-speech-badge speaking">Mówię...</span>}
+      <h3>Sterowanie mową</h3>
+      <div className="speech-buttons">
+        <button 
+          className={`mic-button ${isListening ? 'active' : ''}`}
+          onClick={onStartListening}
+          title="Start/Stop nagrywania"
+        >
+          {isListening ? 'Stop' : 'Start'}
+        </button>
+        
+        <div className="speech-status">
+          {isListening && <div className="status-indicator listening">Słucham...</div>}
+          {isSpeaking && <div className="status-indicator speaking">Mówię...</div>}
+          {webSpeechActive && <div className="status-indicator webspeech">Web Speech aktywny</div>}
+        </div>
       </div>
     </div>
   );
