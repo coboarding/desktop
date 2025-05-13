@@ -56,6 +56,31 @@ function getMainStyles() {
       border-radius: 4px;
       font-size: 12px;
     }
+    
+    /* Interim transcript styles */
+    #interim-text {
+      position: fixed;
+      bottom: 40px;
+      left: 10px;
+      right: 10px;
+      color: #bd93f9;
+      font-style: italic;
+      padding: 5px 10px;
+      border-left: 2px solid #50fa7b;
+      background-color: rgba(80, 250, 123, 0.1);
+      border-radius: 4px;
+      transition: opacity 0.3s ease;
+    }
+    
+    .interim-transcript {
+      opacity: 0.7;
+    }
+    
+    .interim-transcript:empty {
+      opacity: 0;
+      height: 0;
+      padding: 0;
+    }
   `;
 }
 

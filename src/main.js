@@ -121,7 +121,17 @@ const setupExpressServer = () => {
       try {
         const text = await sttService.transcribe(audioData);
         if (text && text.trim()) {
-          // Zmiana stanu animacji na "thinking"
+          log.info(`Rozpoznany tekst: "${text}"`);
+          
+          // Zmiana stanu animacji na "listening" podczas rozpoznawania mowy
+          if (novncServer) {
+            novncServer.setAnimation('listening');
+          }
+          
+          // Informuj użytkownika, że jego wypowiedź została rozpoznana
+          socket.emit('transcription', { user: text });
+          
+          // Zmiana stanu animacji na "thinking" podczas przetwarzania
           if (novncServer) {
             novncServer.setAnimation('thinking');
           }
@@ -130,7 +140,7 @@ const setupExpressServer = () => {
           const response = await llmService.process(text);
           
           // Wysłanie odpowiedzi tekstowej
-          socket.emit('transcription', { user: text, assistant: response });
+          socket.emit('transcription', { assistant: response });
           
           // Zmiana stanu animacji na "talking"
           if (novncServer) {
@@ -141,21 +151,23 @@ const setupExpressServer = () => {
           const audioResponse = await ttsService.synthesize(response);
           socket.emit('audio-response', audioResponse);
 
-          // Powrót do stanu "idle" po zakończeniu mówienia
+          // Powrót do stanu "listening" po zakończeniu mówienia
+          // aby pokazać, że system jest gotowy na kolejne wypowiedzi
           setTimeout(() => {
             if (novncServer) {
-              novncServer.setAnimation('idle');
+              novncServer.setAnimation('listening');
             }
           }, 1000);
         }
       } catch (error) {
         log.error('Błąd przetwarzania audio:', error);
+        socket.emit('error', { message: 'Wystąpił błąd podczas przetwarzania audio' });
       }
     });
     
     // Auto-start konwersacji po połączeniu
     setTimeout(async () => {
-      const welcomeMessage = "Witaj w aplikacji VideoChat! Jak mogę Ci dziś pomóc?";
+      const welcomeMessage = "Witaj w aplikacji VideoChat! Mikrofon został automatycznie włączony, możesz od razu zacząć mówić. Jak mogę Ci dziś pomóc?";
 
       // Zmiana stanu animacji na "talking"
       if (novncServer) {
@@ -167,10 +179,11 @@ const setupExpressServer = () => {
       const welcomeAudio = await ttsService.synthesize(welcomeMessage);
       socket.emit('audio-response', welcomeAudio);
 
-      // Powrót do stanu "idle" po zakończeniu mówienia
+      // Powrót do stanu "listening" po zakończeniu mówienia
+      // aby pokazać, że system jest gotowy na słuchanie
       setTimeout(() => {
         if (novncServer) {
-          novncServer.setAnimation('idle');
+          novncServer.setAnimation('listening');
         }
       }, 3000);
     }, 1000);

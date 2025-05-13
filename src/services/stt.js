@@ -37,28 +37,44 @@ class STTService {
 
     try {
       log.info('Transkrypcja danych audio...');
+      
+      // Dekodowanie danych audio z base64
+      const buffer = Buffer.from(audioData, 'base64');
+      
+      // W rzeczywistej aplikacji użylibyśmy modelu Whisper lub podobnego
+      // Ponieważ nie mamy dostępu do rzeczywistego modelu, użyjemy danych z klienta
+      
+      // Sprawdź, czy dane audio zawierają metadane z transkrypcją
+      // (Klient może dołączyć transkrypcję z Web Speech API)
+      let transcribedText = '';
+      
+      try {
+        // Sprawdź, czy dane są w formacie JSON z transkrypcją
+        const jsonData = JSON.parse(buffer.toString());
+        if (jsonData && jsonData.transcript) {
+          transcribedText = jsonData.transcript;
+        }
+      } catch (e) {
+        // Jeśli nie jest to JSON, to prawdopodobnie są to czyste dane audio
+        // W tym przypadku użyjemy prostego wykrywania mowy
+        // W rzeczywistej aplikacji użylibyśmy tu modelu Whisper
+        
+        // Symulacja wykrywania dźwięku (sprawdzamy, czy dane audio mają wystarczającą długość)
+        if (buffer.length > 1000) {
+          // Zakładamy, że użytkownik coś powiedział
+          transcribedText = "[Wykryto mowę, ale nie można jej rozpoznać. Proszę użyć przeglądarki z obsługą Web Speech API.]";
+        } else {
+          // Zbyt krótki dźwięk, prawdopodobnie cisza
+          return null;
+        }
+      }
 
-      // W rzeczywistej aplikacji, tu byłoby przetwarzanie przez model
-      // Na potrzeby demonstracji, symulujemy różne transkrypcje
-
-      // Symulacja różnych rozpoznanych tekstów
-      const possibleTexts = [
-        'Cześć, jak się masz?',
-        'Co potrafisz?',
-        'Opowiedz mi coś o sobie',
-        'Kim jesteś?',
-        'Jaka jest dzisiaj data?',
-        'Pokaż mi inną animację',
-        'Jak działa ta aplikacja?',
-        'Do widzenia'
-      ];
-
-      // Losowo wybieramy jedną z możliwych transkrypcji
-      const randomIndex = Math.floor(Math.random() * possibleTexts.length);
-      const transcribedText = possibleTexts[randomIndex];
-
-      log.info(`Transkrybowany tekst: ${transcribedText}`);
-      return transcribedText;
+      if (transcribedText) {
+        log.info(`Transkrybowany tekst: ${transcribedText}`);
+        return transcribedText;
+      }
+      
+      return null;
     } catch (error) {
       log.error('Błąd transkrypcji audio:', error);
       throw error;

@@ -228,8 +228,103 @@ document.addEventListener('DOMContentLoaded', () => {
   let mediaRecorder = null;
   let audioChunks = [];
   
-  // Function to start audio recording
+  // Function to start audio recording with Web Speech API
   async function startRecording() {
+    try {
+      // Sprawdzenie czy przeglądarka obsługuje Web Speech API
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        console.error('Web Speech API nie jest obsługiwana w tej przeglądarce');
+        addMessage('system', 'Twoja przeglądarka nie obsługuje rozpoznawania mowy. Spróbuj użyć Chrome.');
+        
+        // Fallback do zwykłego nagrywania audio
+        startFallbackRecording();
+        return;
+      }
+      
+      // Inicjalizacja Web Speech API
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      // Konfiguracja
+      recognition.lang = 'pl-PL';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      
+      let finalTranscript = '';
+      let interimTranscript = '';
+      
+      // Obsługa wyników rozpoznawania
+      recognition.onresult = (event) => {
+        interimTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+            
+            // Wyślij transkrypcję do serwera
+            const transcriptData = {
+              transcript: finalTranscript.trim()
+            };
+            
+            // Konwersja do JSON i wysyłanie
+            const jsonStr = JSON.stringify(transcriptData);
+            const base64data = btoa(jsonStr);
+            socket.emit('audio-data', base64data);
+            
+            // Wyczyść transkrypcję po wysłaniu
+            finalTranscript = '';
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        // Aktualizacja interfejsu użytkownika
+        if (interimTranscript) {
+          // Pokaż tymczasową transkrypcję w interfejsie
+          document.getElementById('interim-text').textContent = interimTranscript;
+        }
+      };
+      
+      // Obsługa błędów
+      recognition.onerror = (event) => {
+        console.error('Błąd rozpoznawania mowy:', event.error);
+        if (event.error === 'no-speech') {
+          console.log('Nie wykryto mowy');
+        } else {
+          addMessage('system', `Błąd rozpoznawania mowy: ${event.error}`);
+        }
+      };
+      
+      // Rozpocznij rozpoznawanie
+      recognition.start();
+      window.speechRecognition = recognition; // Zapisz referencję do globalnej zmiennej
+      
+      // Dodaj element do wyświetlania tymczasowej transkrypcji
+      if (!document.getElementById('interim-text')) {
+        const interimElement = document.createElement('div');
+        interimElement.id = 'interim-text';
+        interimElement.className = 'interim-transcript';
+        document.getElementById('chat-history').appendChild(interimElement);
+      }
+      
+      isRecording = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      console.log('Rozpoczęto rozpoznawanie mowy');
+      
+      // Aktualizacja interfejsu
+      addMessage('system', 'Mikrofon aktywny - mów wyraźnie po polsku');
+    } catch (error) {
+      console.error('Błąd dostępu do mikrofonu:', error);
+      addMessage('system', 'Błąd dostępu do mikrofonu. Sprawdź uprawnienia.');
+      
+      // Fallback do zwykłego nagrywania
+      startFallbackRecording();
+    }
+  }
+  
+  // Fallback do zwykłego nagrywania audio (gdy Web Speech API nie jest dostępne)
+  async function startFallbackRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorder = new MediaRecorder(stream);
@@ -254,10 +349,10 @@ document.addEventListener('DOMContentLoaded', () => {
       isRecording = true;
       startBtn.disabled = true;
       stopBtn.disabled = false;
-      console.log('Started recording automatically');
+      console.log('Started recording in fallback mode');
       
       // Update UI to show recording is active
-      addMessage('system', 'Mikrofon aktywny - możesz teraz mówić');
+      addMessage('system', 'Mikrofon aktywny w trybie awaryjnym - mowa będzie rozpoznawana na serwerze');
     } catch (error) {
       console.error('Error accessing microphone:', error);
       addMessage('system', 'Błąd dostępu do mikrofonu. Sprawdź uprawnienia.');
@@ -266,14 +361,29 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Function to stop recording
   function stopRecording() {
+    // Zatrzymaj Web Speech API jeśli jest aktywne
+    if (window.speechRecognition) {
+      window.speechRecognition.stop();
+      console.log('Zatrzymano rozpoznawanie mowy');
+      
+      // Usuń element tymczasowej transkrypcji
+      const interimElement = document.getElementById('interim-text');
+      if (interimElement) {
+        interimElement.textContent = '';
+      }
+    }
+    
+    // Zatrzymaj mediaRecorder jeśli jest aktywny (tryb awaryjny)
     if (mediaRecorder && isRecording) {
       mediaRecorder.stop();
       mediaRecorder.stream.getTracks().forEach(track => track.stop());
-      isRecording = false;
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      console.log('Stopped recording');
+      console.log('Zatrzymano nagrywanie audio');
     }
+    
+    isRecording = false;
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+    addMessage('system', 'Mikrofon wyłączony');
   }
   
   // Add event listeners to buttons
