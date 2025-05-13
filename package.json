@@ -18,7 +18,13 @@
     "node-vad": "^1.1.4",
     "node-webrtc": "^0.1.0",
     "whisper-node": "^0.1.5",
-    "pico-tts": "^1.0.0"
+    "pico-tts": "^1.0.0",
+    "@novnc/novnc": "^1.4.0",
+    "ascii-art": "^2.8.5",
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.11.0",
+    "term-animation": "^1.0.2",
+    "ws": "^8.13.0"
   },
   "devDependencies": {
     "electron": "^28.0.0",

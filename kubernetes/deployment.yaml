@@ -1,0 +1,48 @@
+# kubernetes/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: videochat-llm
+  labels:
+    app: videochat-llm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: videochat-llm
+  template:
+    metadata:
+      labels:
+        app: videochat-llm
+    spec:
+      containers:
+      - name: videochat-llm
+        image: localhost:5000/videochat-llm:latest
+        ports:
+        - containerPort: 3000
+        resources:
+          limits:
+            memory: "1Gi"
+            cpu: "1"
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: models-volume
+          mountPath: /app/models
+      volumes:
+      - name: models-volume
+        hostPath:
+          path: /home/user/videochat-llm/models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: videochat-llm
+spec:
+  selector:
+    app: videochat-llm
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: NodePort
