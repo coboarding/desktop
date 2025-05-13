@@ -113,6 +113,30 @@ function getMainStyles() {
       70% { box-shadow: 0 0 0 10px rgba(255, 85, 85, 0); }
       100% { box-shadow: 0 0 0 0 rgba(255, 85, 85, 0); }
     }
+    
+    /* Volume indicator styles */
+    .volume-indicator {
+      position: fixed;
+      bottom: 70px;
+      right: 10px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: #50fa7b;
+      opacity: 0.2;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    
+    .volume-indicator.pulse {
+      opacity: 0.8;
+      transform: scale(1.2);
+    }
+    
+    @keyframes volume-pulse {
+      0% { transform: scale(1); opacity: 0.2; }
+      50% { transform: scale(1.3); opacity: 0.8; }
+      100% { transform: scale(1); opacity: 0.2; }
+    }
   `;
 }
 

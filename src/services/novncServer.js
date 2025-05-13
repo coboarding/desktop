@@ -10,6 +10,10 @@ const { app } = require('electron');
 const htmlComponents = require('./novnc/htmlComponents');
 const cssStyles = require('./novnc/cssStyles');
 const clientScripts = require('./novnc/clientScripts');
+const browserAutomationUI = require('./novnc/browserAutomationUI');
+
+// Browser Automation Service
+const BrowserAutomationService = require('./browserAutomation');
 
 // Stałe i konfiguracja
 const CONFIG = {
@@ -37,11 +41,21 @@ class NoVNCServer {
     this.clients = new Set();
     this.currentAnimation = ANIMATION_TYPES.IDLE;
     this.isRunning = false;
+    this.uiMode = options.uiMode || 'ascii'; // 'ascii' lub 'browser'
+    
+    // Inicjalizacja usługi automatyzacji przeglądarki
+    this.browserAutomation = new BrowserAutomationService({
+      screenshotDir: path.join(this.appPath, 'screenshots'),
+      videoDir: path.join(this.appPath, 'videos'),
+      headless: options.headlessBrowser !== false,
+      recordVideo: options.recordVideo || false
+    });
     
     // Opcje konfiguracyjne
     this.config = {
       frameRate: options.frameRate || CONFIG.FRAME_RATE,
-      maxPortAttempts: options.maxPortAttempts || CONFIG.MAX_PORT_ATTEMPTS
+      maxPortAttempts: options.maxPortAttempts || CONFIG.MAX_PORT_ATTEMPTS,
+      defaultBrowserUrl: options.defaultBrowserUrl || 'https://www.google.com'
     };
   }
 
@@ -70,6 +84,15 @@ class NoVNCServer {
 
       // Konfiguracja serwera WebSocket
       this._setupWebSocketServer();
+
+      // Inicjalizacja usługi automatyzacji przeglądarki
+      await this.browserAutomation.initialize();
+      
+      // Jeśli tryb UI to 'browser', uruchom przeglądarkę
+      if (this.uiMode === 'browser') {
+        await this.browserAutomation.startBrowser();
+        await this.browserAutomation.navigateTo(this.config.defaultBrowserUrl);
+      }
 
       // Uruchomienie serwera
       await this._startServer();
