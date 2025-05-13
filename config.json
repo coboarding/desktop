@@ -1,0 +1,18 @@
+{
+  "app": {
+    "name": "VideoChat LLM",
+    "version": "1.0.0",
+    "port": 3000,
+    "novnc_port": 6080
+  },
+  "models": {
+    "llm": "/home/tom/github/coboarding/desktop/models/llm/model.onnx",
+    "tts": "/home/tom/github/coboarding/desktop/models/tts/model.bin",
+    "stt": "/home/tom/github/coboarding/desktop/models/stt/model.bin"
+  },
+  "infrastructure": {
+    "k3s_enabled": false,
+    "kubeconfig": "/home/tom/github/coboarding/desktop/kubernetes/kubeconfig",
+    "use_terraform": true
+  }
+}

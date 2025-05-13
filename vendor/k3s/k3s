@@ -1,0 +1,4 @@
+#!/bin/bash
+  echo "K3s simulator"
+  echo "This is a placeholder for the K3s binary"
+  sleep infinity
