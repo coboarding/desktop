@@ -223,26 +223,63 @@ document.addEventListener('DOMContentLoaded', () => {
     videoPlaceholder.innerHTML = '<p>Kamera niedostępna w tej wersji</p>';
   }
   
-  // Initialize audio recording (simplified)
+  // Initialize audio recording with auto-start
   let isRecording = false;
+  let mediaRecorder = null;
+  let audioChunks = [];
   
-  startBtn.addEventListener('click', () => {
-    if (!isRecording) {
+  // Function to start audio recording
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      
+      mediaRecorder.addEventListener('dataavailable', event => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+          
+          // Send audio data to server
+          const audioBlob = new Blob(audioChunks);
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64data = reader.result.split(',')[1];
+            socket.emit('audio-data', base64data);
+            audioChunks = [];
+          };
+          reader.readAsDataURL(audioBlob);
+        }
+      });
+      
+      mediaRecorder.start(1000); // Capture in 1-second intervals
       isRecording = true;
       startBtn.disabled = true;
       stopBtn.disabled = false;
-      console.log('Started recording');
+      console.log('Started recording automatically');
+      
+      // Update UI to show recording is active
+      addMessage('system', 'Mikrofon aktywny - możesz teraz mówić');
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      addMessage('system', 'Błąd dostępu do mikrofonu. Sprawdź uprawnienia.');
     }
-  });
+  }
   
-  stopBtn.addEventListener('click', () => {
-    if (isRecording) {
+  // Function to stop recording
+  function stopRecording() {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
       isRecording = false;
       startBtn.disabled = false;
       stopBtn.disabled = true;
       console.log('Stopped recording');
     }
-  });
+  }
+  
+  // Add event listeners to buttons
+  startBtn.addEventListener('click', startRecording);
+  
+  stopBtn.addEventListener('click', stopRecording);
   
   // Function to fetch and set the noVNC port
   async function setupNoVNC() {
@@ -265,6 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize the app
   initCamera();
-  stopBtn.disabled = true;
   setupNoVNC();
+  
+  // Auto-start audio recording when the app loads
+  setTimeout(() => {
+    startRecording();
+  }, 1500); // Short delay to ensure everything is loaded
 });
