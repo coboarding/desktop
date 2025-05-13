@@ -2,6 +2,19 @@
 desktop
 # VideoChat LLM z ASCII VNC - Dokumentacja
 
+## 📑 Spis treści
+
+- [Wprowadzenie](#wprowadzenie)
+- [Funkcje](#funkcje)
+- [Architektura](#architektura)
+- [Instalacja i zależności systemowe](#instalacja-i-zależności-systemowe)
+- [Testowanie i walidacja](#testowanie-i-walidacja)
+- [Struktura projektu i dokumentacja](#struktura-projektu-i-dokumentacja)
+- [Najczęstsze problemy](#najczęstsze-problemy)
+- [Kontakt i wsparcie](#kontakt-i-wsparcie)
+- [Prezentacja rozwiązania](./docs/presentation.md)
+- [Szczegółowa dokumentacja](#szczegółowa-dokumentacja)
+
 ## Wprowadzenie
 
 VideoChat LLM to aplikacja desktopowa oparta na Electron, która umożliwia prowadzenie rozmów głosowych z asystentem AI, wizualizowanym za pomocą animacji ASCII. Aplikacja łączy technologie przetwarzania języka naturalnego (LLM), rozpoznawania mowy (STT) i syntezy mowy (TTS) w jednym pakiecie, wraz z infrastrukturą Kubernetes (K3s), Terraform i Ansible do zarządzania swoimi komponentami.

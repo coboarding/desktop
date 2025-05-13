@@ -1,3 +1,12 @@
+# 📑 Spis treści
+
+- [Co to jest VideoChat LLM?](#1-co-to-jest-videochat-llm)
+- [Główne korzyści](#2-główne-korzyści)
+- [Przykłady użycia](#3-przykłady-użycia)
+- [Jak zacząć?](#4-jak-zacząć)
+- [Podsumowanie](#5-podsumowanie)
+- [Kontakt i dokumentacja](#6-kontakt-i-dokumentacja)
+
 # VideoChat LLM z ASCII VNC – Prezentacja rozwiązania
 
 ---

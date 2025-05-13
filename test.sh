@@ -80,11 +80,14 @@ for (const dir of dirs) {
 process.exit(success ? 0 : 1);
 EOF
 
-# Instalujemy js-yaml jeśli nie jest zainstalowany
-npm list js-yaml --depth=0 || npm install --no-save js-yaml
+# Instalujemy js-yaml globalnie dla tego skryptu
+npm install --no-save js-yaml
+
+# Upewniamy się, że katalogi istnieją (tworzymy je jeśli nie)
+mkdir -p kubernetes terraform ansible
 
 # Uruchamiamy walidator
-node /tmp/yaml-validator.js kubernetes/ terraform/ ansible/ || fail "Błąd w plikach YAML!"
+NODE_PATH=$(npm root) node /tmp/yaml-validator.js kubernetes/ terraform/ ansible/ || fail "Błąd w plikach YAML!"
 
 log "Walidacja plików JSON (jsonlint)"
 npx jsonlint models/**/*.json --quiet || log "Brak plików JSON do walidacji lub ostrzeżenia."
