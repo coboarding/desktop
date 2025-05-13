@@ -424,77 +424,114 @@ document.addEventListener('DOMContentLoaded', () => {
       // Obsługa błędów
       recognition.onerror = (event) => {
         console.error('Błąd rozpoznawania mowy:', event.error);
-        if (event.error === 'no-speech') {
-          console.log('Nie wykryto mowy');
-          // Nie pokazuj błędu użytkownikowi, po prostu kontynuuj nasłuchiwanie
-        } else if (event.error === 'not-allowed') {
-          addMessage('system', 'Brak dostępu do mikrofonu. Kliknij ikonkę kłódki w pasku adresu i zezwól na dostęp do mikrofonu.');
-          
-          // Dodaj przycisk do ponownego żądania uprawnień
-          const permissionBtn = document.createElement('button');
-          permissionBtn.textContent = 'Przyznaj dostęp do mikrofonu';
-          permissionBtn.className = 'permission-button';
-          permissionBtn.onclick = () => {
-            // Usuń przycisk
-            permissionBtn.remove();
-            // Spróbuj ponownie
-            startRecording();
-          };
-          document.getElementById('chat-history').appendChild(permissionBtn);
-        } else if (event.error === 'network') {
-          // Błąd sieci - przejdź do trybu offline
-          console.log('Błąd sieci w rozpoznawaniu mowy');
-          
-          // Jeśli nie jesteśmy jeszcze w trybie offline, poinformuj użytkownika
-          if (!isOfflineMode) {
-            addMessage('system', 'Wystąpił problem z połączeniem sieciowym. Przechodzenie do trybu offline...');
-            
-            // Zatrzymaj obecne rozpoznawanie
-            try {
-              recognition.abort();
-            } catch (error) {
-              console.error('Błąd zatrzymywania rozpoznawania mowy:', error);
-            }
-            
-            // Przejdź do trybu offline
-            setTimeout(() => {
-              console.log('Przechodzenie do trybu offline po błędzie sieci');
-              // Aktywuj tryb offline
-              handleOfflineMode();
-            }, 500);
-          }
-          
+        
+        // Jeśli już jesteśmy w trybie offline, ignoruj wszystkie błędy
+        if (isOfflineMode) {
+          console.log('Jesteśmy w trybie offline, ignoruję błąd:', event.error);
           return;
-        } else {
-          addMessage('system', `Błąd rozpoznawania mowy: ${event.error}`);
+        }
+        
+        // Obsługa różnych typów błędów
+        switch (event.error) {
+          case 'no-speech':
+            console.log('Nie wykryto mowy');
+            // Nie pokazuj błędu użytkownikowi, po prostu kontynuuj nasłuchiwanie
+            break;
+            
+          case 'not-allowed':
+            addMessage('system', 'Brak dostępu do mikrofonu. Kliknij ikonkę kłódki w pasku adresu i zezwól na dostęp do mikrofonu.');
+            
+            // Dodaj przycisk do ponownego żądania uprawnień
+            const permissionBtn = document.createElement('button');
+            permissionBtn.textContent = 'Przyznaj dostęp do mikrofonu';
+            permissionBtn.className = 'permission-button';
+            permissionBtn.onclick = () => {
+              // Usuń przycisk
+              permissionBtn.remove();
+              // Spróbuj ponownie
+              startRecording();
+            };
+            document.getElementById('chat-history').appendChild(permissionBtn);
+            break;
+            
+          case 'network':
+          case 'aborted':
+          case 'audio-capture':
+          case 'service-not-allowed':
+            // Wszystkie te błędy powinny spowodować przejście do trybu offline
+            console.log(`Błąd ${event.error} w rozpoznawaniu mowy - przechodzenie do trybu offline`);
+            
+            // Poinformuj użytkownika tylko raz
+            if (!isOfflineMode) {
+              addMessage('system', 'Wystąpił problem z rozpoznawaniem mowy. Przechodzenie do trybu offline...');
+              
+              // Przejdź do trybu offline
+              handleOfflineMode();
+            }
+            break;
+            
+          default:
+            // Dla innych błędów tylko informuj użytkownika
+            if (!isOfflineMode) {
+              addMessage('system', `Wystąpił błąd rozpoznawania mowy. Spróbuj użyć przycisków komend.`);
+            }
+            break;
         }
       };
       
       // Obsługa zakończenia rozpoznawania
       recognition.onend = () => {
         console.log('Rozpoznawanie mowy zakończone');
+        
+        // Jeśli jesteśmy w trybie offline, nie próbuj ponownie uruchamiać rozpoznawania
+        if (isOfflineMode) {
+          console.log('Tryb offline aktywny, nie uruchamiam ponownie rozpoznawania mowy');
+          return;
+        }
+        
         // Jeśli nadal powinniśmy nagrywać, uruchom ponownie
         if (isRecording) {
           try {
             recognition.start();
             console.log('Ponowne uruchomienie rozpoznawania mowy');
           } catch (e) {
-            console.error('Błąd przy ponownym uruchomieniu rozpoznawania:', e);
+            console.error('Błąd ponownego uruchamiania rozpoznawania mowy:', e);
+            
+            // Jeśli błąd wskazuje na problem z mikrofonem lub usługą, przejdź do trybu offline
+            if (!isOfflineMode) {
+              console.log('Przechodzenie do trybu offline po błędzie ponownego uruchamiania');
+              handleOfflineMode();
+              return;
+            }
+            
+            // Spróbuj ponownie po krótkiej przerwie tylko jeśli nie jesteśmy w trybie offline
+            setTimeout(() => {
+              if (!isOfflineMode && isRecording) {
+                try {
+                  recognition.start();
+                  console.log('Ponowna próba uruchomienia rozpoznawania mowy po błędzie');
+                } catch (error) {
+                  console.error('Nie można uruchomić rozpoznawania mowy:', error);
+                  addMessage('system', 'Wystąpił problem z rozpoznawaniem mowy. Przechodzenie do trybu offline...');
+                  handleOfflineMode();
+                }
+              }
+            }, 1000);
           }
+        }
+        
+        // Dodaj element do wyświetlania tymczasowej transkrypcji
+        if (!document.getElementById('interim-text')) {
+          const interimElement = document.createElement('div');
+          interimElement.id = 'interim-text';
+          interimElement.className = 'interim-transcript';
+          document.getElementById('chat-history').appendChild(interimElement);
         }
       };
       
       // Rozpocznij rozpoznawanie
       recognition.start();
       window.speechRecognition = recognition; // Zapisz referencję do globalnej zmiennej
-      
-      // Dodaj element do wyświetlania tymczasowej transkrypcji
-      if (!document.getElementById('interim-text')) {
-        const interimElement = document.createElement('div');
-        interimElement.id = 'interim-text';
-        interimElement.className = 'interim-transcript';
-        document.getElementById('chat-history').appendChild(interimElement);
-      }
       
       isRecording = true;
       startBtn.disabled = true;
