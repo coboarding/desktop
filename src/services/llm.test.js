@@ -16,6 +16,7 @@ describe('LLMService', () => {
 
   test('should answer simple greeting', async () => {
     await llm.initialize();
+    expect(typeof llm.processText).toBe('function');
     const answer = await llm.processText('Cześć');
     expect(answer.toLowerCase()).toContain('witaj');
   });
