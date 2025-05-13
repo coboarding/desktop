@@ -66,8 +66,17 @@ const initializeServices = async () => {
     asciiGenerator = new AsciiGenerator();
     await asciiGenerator.initialize();
     
-    // Inicjalizacja serwera noVNC
-    novncServer = new NoVNCServer({ port: 6080 });
+    // Sprawdź, czy włączony jest tryb automatyzacji przeglądarki
+    const browserMode = process.argv.includes('--browser-mode') || process.env.BROWSER_MODE === 'true';
+    
+    // Inicjalizacja serwera noVNC z odpowiednim trybem UI
+    novncServer = new NoVNCServer({ 
+      port: 6080,
+      uiMode: browserMode ? 'browser' : 'ascii',
+      headlessBrowser: process.argv.includes('--headless') || process.env.HEADLESS_BROWSER === 'true',
+      recordVideo: process.argv.includes('--record-video') || process.env.RECORD_VIDEO === 'true',
+      defaultBrowserUrl: process.env.DEFAULT_BROWSER_URL || 'https://www.google.com'
+    });
     await novncServer.initialize();
     
     // Inicjalizacja K3s w tle (jeśli potrzebne)

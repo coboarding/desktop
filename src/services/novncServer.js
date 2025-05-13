@@ -219,8 +219,20 @@ class NoVNCServer {
       log.info('Klient noVNC rozłączony');
     });
 
-    // Rozpocznij wysyłanie animacji ASCII
-    this.startSendingAsciiFrames(socket);
+    // W zależności od trybu UI, rozpocznij odpowiednie działania
+    if (this.uiMode === 'browser') {
+      // Wyślij informację o aktualnym URL przeglądarki
+      if (this.browserAutomation.isRunning && this.browserAutomation.currentUrl) {
+        socket.send(JSON.stringify({
+          type: 'browser-update',
+          updateType: 'url',
+          url: this.browserAutomation.currentUrl
+        }));
+      }
+    } else {
+      // Rozpocznij wysyłanie animacji ASCII
+      this.startSendingAsciiFrames(socket);
+    }
   }
   
   /**
@@ -233,11 +245,142 @@ class NoVNCServer {
       
       if (data.type === 'control-animation' && data.animationType) {
         this.setAnimation(data.animationType);
+      } else if (data.type === 'browser-command' && this.uiMode === 'browser') {
+        // Obsługa komend automatyzacji przeglądarki
+        this._handleBrowserCommand(socket, data);
       }
       
-      log.info(`Wiadomość od klienta noVNC: ${message}`);
+      log.info(`Wiadomość od klienta noVNC: ${JSON.stringify(data)}`);
     } catch (error) {
       log.error(`Błąd przetwarzania wiadomości WebSocket: ${error}`);
+    }
+  }
+  
+  /**
+   * Obsługa komend automatyzacji przeglądarki
+   * @private
+   * @param {WebSocket} socket - Połączenie WebSocket klienta
+   * @param {Object} data - Dane komendy
+   */
+  async _handleBrowserCommand(socket, data) {
+    if (!this.browserAutomation) {
+      this._sendBrowserUpdate(socket, 'error', 'Usługa automatyzacji przeglądarki nie jest dostępna');
+      return;
+    }
+    
+    try {
+      const { command, data: commandData } = data;
+      log.info(`Otrzymano komendę przeglądarki: ${command}`);
+      
+      // Jeśli przeglądarka nie jest uruchomiona, uruchom ją (z wyjątkiem komendy stop)
+      if (!this.browserAutomation.isRunning && command !== 'stop') {
+        await this.browserAutomation.startBrowser();
+      }
+      
+      // Obsługa różnych komend
+      switch (command) {
+        case 'navigate':
+          if (commandData && commandData.url) {
+            this._sendBrowserUpdate(socket, 'status', `Przechodzenie do ${commandData.url}...`);
+            const success = await this.browserAutomation.navigateTo(commandData.url);
+            if (success) {
+              this._sendBrowserUpdate(socket, 'navigation', this.browserAutomation.currentUrl);
+            } else {
+              this._sendBrowserUpdate(socket, 'error', `Nie można przejść do ${commandData.url}`);
+            }
+          }
+          break;
+          
+        case 'back':
+          if (this.browserAutomation.page) {
+            await this.browserAutomation.page.goBack();
+            this._sendBrowserUpdate(socket, 'navigation', this.browserAutomation.page.url());
+          }
+          break;
+          
+        case 'forward':
+          if (this.browserAutomation.page) {
+            await this.browserAutomation.page.goForward();
+            this._sendBrowserUpdate(socket, 'navigation', this.browserAutomation.page.url());
+          }
+          break;
+          
+        case 'refresh':
+          if (this.browserAutomation.page) {
+            await this.browserAutomation.page.reload();
+            this._sendBrowserUpdate(socket, 'navigation', this.browserAutomation.page.url());
+          }
+          break;
+          
+        case 'screenshot':
+          this._sendBrowserUpdate(socket, 'status', 'Wykonywanie zrzutu ekranu...');
+          const screenshotPath = await this.browserAutomation.takeScreenshot();
+          if (screenshotPath) {
+            this._sendBrowserUpdate(socket, 'status', `Zrzut ekranu zapisany: ${screenshotPath}`);
+          } else {
+            this._sendBrowserUpdate(socket, 'error', 'Nie można wykonać zrzutu ekranu');
+          }
+          break;
+          
+        case 'click':
+          if (commandData && commandData.selector) {
+            const clicked = await this.browserAutomation.clickElement(commandData.selector);
+            if (!clicked) {
+              this._sendBrowserUpdate(socket, 'error', `Nie można kliknąć elementu: ${commandData.selector}`);
+            }
+          }
+          break;
+          
+        case 'fill':
+          if (commandData && commandData.formData) {
+            const filled = await this.browserAutomation.fillForm(commandData.formData);
+            if (!filled) {
+              this._sendBrowserUpdate(socket, 'error', 'Nie można wypełnić formularza');
+            }
+          }
+          break;
+          
+        case 'run-scenario':
+          if (commandData && commandData.scenario) {
+            this._sendBrowserUpdate(socket, 'status', 'Uruchamianie scenariusza testu...');
+            const result = await this.browserAutomation.runTestScenario(commandData.scenario);
+            if (result.success) {
+              this._sendBrowserUpdate(socket, 'status', 'Scenariusz testu zakończony pomyślnie');
+            } else {
+              this._sendBrowserUpdate(socket, 'error', `Błąd scenariusza testu: ${result.error || 'Nieznany błąd'}`);
+            }
+          }
+          break;
+          
+        case 'stop':
+          await this.browserAutomation.stopBrowser();
+          this._sendBrowserUpdate(socket, 'status', 'Przeglądarka zatrzymana');
+          break;
+          
+        default:
+          this._sendBrowserUpdate(socket, 'error', `Nieznana komenda: ${command}`);
+      }
+    } catch (error) {
+      log.error(`Błąd podczas wykonywania komendy przeglądarki: ${error}`);
+      this._sendBrowserUpdate(socket, 'error', `Błąd: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Wysyła aktualizację stanu przeglądarki do klienta
+   * @private
+   * @param {WebSocket} socket - Połączenie WebSocket klienta
+   * @param {string} updateType - Typ aktualizacji
+   * @param {string} message - Treść aktualizacji
+   */
+  _sendBrowserUpdate(socket, updateType, message) {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        type: 'browser-update',
+        updateType,
+        message,
+        url: this.browserAutomation && this.browserAutomation.currentUrl
+      }));
     }
   }
   
@@ -335,7 +478,18 @@ class NoVNCServer {
    * @returns {string} - Kod HTML dla interfejsu noVNC
    */
   _generateVncHtml() {
-    return htmlComponents.generateMainHtml();
+    // W zależności od trybu UI, generuj odpowiedni HTML
+    if (this.uiMode === 'browser') {
+      // Tryb automatyzacji przeglądarki
+      const browserUI = browserAutomationUI.generateBrowserAutomationInterface();
+      return htmlComponents.generateMainHtml(
+        `<style>${browserUI.css}</style><script>${browserUI.script}</script>`,
+        browserUI.html
+      );
+    } else {
+      // Domyślny tryb ASCII
+      return htmlComponents.generateMainHtml();
+    }
   }
   
   /**

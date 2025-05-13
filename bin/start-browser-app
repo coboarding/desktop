@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Start the application in browser automation mode
+cd "$(dirname "$0")/.."
+npm start -- --browser-mode "$@"

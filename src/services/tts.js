@@ -6,51 +6,52 @@ class TTSService {
   constructor(options) {
     this.modelPath = options.modelPath;
     this.initialized = false;
+    this.useWebAPI = true; // Zawsze używaj Web Speech API
   }
 
   async initialize() {
     try {
-      log.info(`Inicjalizacja modelu TTS: ${this.modelPath}`);
-
+      log.info(`Inicjalizacja serwisu TTS`);
+      
       // Sprawdź, czy katalog modelu istnieje
       if (fs.existsSync(this.modelPath)) {
-        // W rzeczywistej aplikacji tutaj inicjalizowalibyśmy model TTS
+        log.info('Katalog modeli TTS istnieje, ale używamy Web Speech API');
       } else {
         log.warn(`Model TTS nie znaleziony: ${this.modelPath}`);
-        log.info('Używanie symulowanego modelu TTS');
+        log.info('Używanie Web Speech API dla TTS');
+        
+        // Utwórz katalog dla modeli, jeśli nie istnieje
+        fs.mkdirSync(this.modelPath, { recursive: true });
       }
 
       this.initialized = true;
-      log.info('Model TTS zainicjalizowany pomyślnie');
+      log.info('Serwis TTS zainicjalizowany pomyślnie');
       return true;
     } catch (error) {
-      log.error('Błąd inicjalizacji modelu TTS:', error);
+      log.error('Błąd inicjalizacji serwisu TTS:', error);
       throw error;
     }
   }
 
   async synthesize(text) {
     if (!this.initialized) {
-      throw new Error('Model TTS nie został zainicjalizowany');
+      throw new Error('Serwis TTS nie został zainicjalizowany');
     }
 
     try {
       log.info(`Synteza tekstu na mowę: ${text}`);
 
-      // W rzeczywistej aplikacji, tutaj byłoby przetwarzanie przez model TTS
-      // Na potrzeby demonstracji, generujemy "pusty" dźwięk
-
-      // Symulacja generowania dźwięku - tworzymy pusty bufor audio
-      // W rzeczywistej aplikacji tutaj byłaby prawdziwa synteza mowy
-
-      // Generujemy losowy bufor audio (w rzeczywistości pustą tablicę)
-      const audioLength = text.length * 1000; // Długość proporcjonalna do długości tekstu
-      const audioBuffer = Buffer.alloc(audioLength);
-
-      log.info(`Wygenerowano dźwięk o długości: ${audioLength} bajtów`);
-
-      // W rzeczywistości zwróciłoby to prawdziwy dźwięk
-      return audioBuffer;
+      // Zwracamy obiekt z tekstem do odczytania przez Web Speech API w przeglądarce
+      return {
+        type: 'web-tts',
+        text: text,
+        options: {
+          lang: 'pl-PL',
+          volume: 1.0,
+          rate: 1.0,
+          pitch: 1.0
+        }
+      };
     } catch (error) {
       log.error('Błąd syntezy mowy:', error);
       throw error;

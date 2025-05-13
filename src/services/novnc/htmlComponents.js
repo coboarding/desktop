@@ -4,17 +4,17 @@
  */
 
 // Main HTML template for the noVNC interface
-function generateMainHtml(additionalScripts = '') {
+function generateMainHtml(additionalScripts = '', customContent = null) {
   return `<!DOCTYPE html>
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ASCII Animation</title>
+  <title>VideoChat LLM</title>
   ${getCssStyles()}
 </head>
 <body>
-  ${getBodyContent()}
+  ${customContent ? customContent : getBodyContent()}
   ${getClientScripts()}
   ${additionalScripts}
 </body>
