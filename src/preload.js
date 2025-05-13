@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // TTS
   synthesizeSpeech: (text) => ipcRenderer.invoke('tts-synthesize', text),
   
+  // Animacja ASCII
+  setAnimationType: (type) => ipcRenderer.invoke('set-animation-type', type),
+  
   // System
   getAppInfo: () => ({
     version: process.env.npm_package_version,

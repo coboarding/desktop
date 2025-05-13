@@ -46,42 +46,42 @@ function App() {
       if (socket.current) {
         socket.current.disconnect();
       }
-      if (audioContext.current) {
+      if (audioContext.current && audioContext.current.state !== 'closed') {
         audioContext.current.close();
       }
     };
   }, []);
-  
+
   // Inicjalizacja nagrywania głosu
   const startListening = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+
       // Konfiguracja rekordera
       const mediaRecorder = new MediaRecorder(stream);
       audioRecorder.current = mediaRecorder;
-      
+
       let audioChunks = [];
-      
+
       mediaRecorder.ondataavailable = (event) => {
         audioChunks.push(event.data);
       };
-      
+
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
         audioChunks = [];
-        
+
         // Konwersja Blob na ArrayBuffer
         const arrayBuffer = await audioBlob.arrayBuffer();
-        
+
         // Wysłanie danych audio do serwera
         socket.current.emit('audio-data', new Uint8Array(arrayBuffer));
       };
-      
+
       // Rozpoczęcie nagrywania
       mediaRecorder.start();
       setIsListening(true);
-      
+
       // Automatyczne zatrzymanie po 5 sekundach (lub innym czasie)
       setTimeout(() => {
         if (mediaRecorder.state === 'recording') {
@@ -92,27 +92,39 @@ function App() {
     } catch (error) {
       console.error('Błąd podczas próby nagrywania audio:', error);
       setIsListening(false);
+
+      // Symulacja wysłania danych audio w trybie demonstracyjnym
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Symulacja wysłania danych audio...');
+        // Wysyłamy puste dane, backend i tak zwróci symulowaną odpowiedź
+        socket.current.emit('audio-data', new Uint8Array(10));
+      }
     }
   };
-  
+
   // Odtwarzanie odpowiedzi audio
   const playAudioResponse = async (audioData) => {
     try {
       const blob = new Blob([audioData], { type: 'audio/wav' });
       const url = URL.createObjectURL(blob);
-      
+
       audioPlayer.current.src = url;
       setIsSpeaking(true);
-      
+
       audioPlayer.current.onended = () => {
         URL.revokeObjectURL(url);
         setIsSpeaking(false);
       };
-      
+
       await audioPlayer.current.play();
     } catch (error) {
       console.error('Błąd odtwarzania audio:', error);
       setIsSpeaking(false);
+
+      // W przypadku błędu odtwarzania, symulujemy zakończenie mówienia po 2 sekundach
+      setTimeout(() => {
+        setIsSpeaking(false);
+      }, 2000);
     }
   };
   

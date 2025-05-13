@@ -6,6 +6,14 @@ const http = require('http');
 const { Server } = require('socket.io');
 const log = require('electron-log');
 
+// Importy lokalnych serwisów
+const LLMService = require('./services/llm');
+const STTService = require('./services/stt');
+const TTSService = require('./services/tts');
+const K3sManager = require('./infrastructure/k3s');
+const NoVNCServer = require('./services/novncServer');
+const AsciiGenerator = require('./services/asciifier');
+
 // Ścieżki
 const appPath = app.getAppPath();
 const modelsPath = path.join(appPath, 'models');
@@ -25,6 +33,8 @@ let llmService = null;
 let sttService = null;
 let ttsService = null;
 let k3sManager = null;
+let novncServer = null;
+let asciiGenerator = null;
 
 // Inicjalizacja serwisów
 const initializeServices = async () => {
@@ -58,6 +68,23 @@ const initializeServices = async () => {
       await k3sManager.start();
     }
     
+    // Inicjalizacja generatora ASCII
+    asciiGenerator = new AsciiGenerator();
+    await asciiGenerator.initialize();
+    
+    // Inicjalizacja serwera noVNC
+    novncServer = new NoVNCServer({ port: 6080 });
+    await novncServer.initialize();
+    
+    // Inicjalizacja K3s w tle (jeśli potrzebne)
+    k3sManager = new K3sManager({
+      kubeconfig: path.join(appPath, 'kubernetes/kubeconfig')
+    });
+
+    if (process.env.USE_K3S === 'true') {
+      await k3sManager.start();
+    }
+
     log.info('Wszystkie serwisy zainicjalizowane!');
     return true;
   } catch (error) {
@@ -84,15 +111,32 @@ const setupExpressServer = () => {
       try {
         const text = await sttService.transcribe(audioData);
         if (text && text.trim()) {
+          // Zmiana stanu animacji na "thinking"
+          if (novncServer) {
+            novncServer.setAnimation('thinking');
+          }
+
           // Przetwarzanie przez LLM
           const response = await llmService.process(text);
           
           // Wysłanie odpowiedzi tekstowej
           socket.emit('transcription', { user: text, assistant: response });
           
+          // Zmiana stanu animacji na "talking"
+          if (novncServer) {
+            novncServer.setAnimation('talking');
+          }
+
           // Generowanie odpowiedzi głosowej
           const audioResponse = await ttsService.synthesize(response);
           socket.emit('audio-response', audioResponse);
+
+          // Powrót do stanu "idle" po zakończeniu mówienia
+          setTimeout(() => {
+            if (novncServer) {
+              novncServer.setAnimation('idle');
+            }
+          }, 1000);
         }
       } catch (error) {
         log.error('Błąd przetwarzania audio:', error);
@@ -102,10 +146,23 @@ const setupExpressServer = () => {
     // Auto-start konwersacji po połączeniu
     setTimeout(async () => {
       const welcomeMessage = "Witaj w aplikacji VideoChat! Jak mogę Ci dziś pomóc?";
+
+      // Zmiana stanu animacji na "talking"
+      if (novncServer) {
+        novncServer.setAnimation('talking');
+      }
+
       socket.emit('transcription', { assistant: welcomeMessage });
       
       const welcomeAudio = await ttsService.synthesize(welcomeMessage);
       socket.emit('audio-response', welcomeAudio);
+
+      // Powrót do stanu "idle" po zakończeniu mówienia
+      setTimeout(() => {
+        if (novncServer) {
+          novncServer.setAnimation('idle');
+        }
+      }, 3000);
     }, 1000);
   });
   
@@ -173,15 +230,33 @@ ipcMain.handle('tts-synthesize', async (event, text) => {
   }
 });
 
+// Nowy handler dla zmiany typu animacji
+ipcMain.handle('set-animation-type', (event, type) => {
+  if (novncServer) {
+    novncServer.setAnimation(type);
+    return true;
+  }
+  return false;
+});
+
 // Zamknięcie aplikacji
 app.on('window-all-closed', async () => {
   // Zatrzymanie K3s
   if (k3sManager) await k3sManager.stop();
+  
+  // Zatrzymanie serwera noVNC
+  if (novncServer) await novncServer.stop();
   
   // Zatrzymanie serwera HTTP
   if (httpServer) httpServer.close();
   
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
   }
 });

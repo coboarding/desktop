@@ -31,23 +31,33 @@ class AsciiGenerator {
         } else {
           // Utwórz domyślną animację jeśli brak pliku
           this.animationSets[type] = this.generateDefaultAnimationSet(type);
+
+          // Zapisz domyślną animację do pliku
+          const dirPath = path.join(__dirname, '../ascii-animations');
+          if (!fs.existsSync(dirPath)) {
+            fs.mkdirSync(dirPath, { recursive: true });
+          }
+
+          const fileContent = this.animationSets[type].map(frame => `FRAME${frame}`).join('\n');
+          fs.writeFileSync(filePath, fileContent);
         }
       });
-      
+
+      log.info('Generator ASCII zainicjalizowany pomyślnie');
       return true;
     } catch (error) {
       log.error('Błąd inicjalizacji generatora ASCII:', error);
       return false;
     }
   }
-  
+
   generateDefaultAnimationSet(type) {
     const frames = [];
-    
+
     // Generuj 5 podstawowych klatek
     for (let i = 0; i < 5; i++) {
       let frame = '';
-      
+
       switch (type) {
         case 'idle':
           frame = this.generateFace('neutral', i);
@@ -62,22 +72,22 @@ class AsciiGenerator {
           frame = this.generateFace('thinking', i);
           break;
       }
-      
+
       frames.push(frame);
     }
-    
+
     return frames;
   }
-  
+
   generateFace(expression, frameIndex) {
     // Prosta proceduralna generacja ASCII art dla różnych wyrazów twarzy
     let eyes = '';
     let mouth = '';
-    
+
     switch (expression) {
       case 'neutral':
         eyes = '  o   o  ';
-        mouth = '   ---   ';
+        mouth = frameIndex % 2 === 0 ? '   ---   ' : '   ---   ';
         break;
       case 'talking':
         eyes = '  o   o  ';
@@ -85,11 +95,11 @@ class AsciiGenerator {
         break;
       case 'listening':
         eyes = '  ^   ^  ';
-        mouth = '   ---   ';
+        mouth = frameIndex % 2 === 0 ? '   ---   ' : '   ...   ';
         break;
       case 'thinking':
         eyes = '  o   -  ';
-        mouth = '   ---   ';
+        mouth = frameIndex % 2 === 0 ? '   ---   ' : '   ???   ';
         break;
     }
     

@@ -358,3 +358,485 @@ body, html {
 .setting-item button:hover {
   background-color: #ff79c6;
 }
+
+/* Układ siatki dla wideo */
+.video-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.user-video-container,
+.bot-video-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.user-video-container h3,
+.bot-video-container h3 {
+  color: #bd93f9;
+  margin-bottom: 10px;
+  font-weight: normal;
+}
+
+.video-frame,
+.ascii-frame {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background-color: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.video-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ascii-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #282a36;
+  border: 1px solid #44475a;
+}
+
+.ascii-frame iframe,
+.novnc-container {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.ascii-animation {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #282a36;
+  color: #50fa7b;
+  font-family: 'Courier New', monospace;
+}
+
+.novnc-frame {
+  background-color: #282a36;
+}
+
+/* Główne style aplikacji */
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #1e1e2e;
+  color: #f8f8f2;
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Style zakładek */
+.tabs {
+  display: flex;
+  background-color: #282a36;
+  border-bottom: 1px solid #44475a;
+}
+
+.tabs button {
+  padding: 12px 20px;
+  border: none;
+  background: none;
+  color: #bd93f9;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.tabs button:hover {
+  background-color: #44475a;
+}
+
+.tabs button.active {
+  background-color: #44475a;
+  color: #50fa7b;
+  font-weight: bold;
+  border-bottom: 2px solid #50fa7b;
+}
+
+/* Zawartość zakładek */
+.tab-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Układ siatki dla wideo */
+.video-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.user-video-container,
+.bot-video-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.user-video-container h3,
+.bot-video-container h3 {
+  color: #bd93f9;
+  margin-bottom: 10px;
+  font-weight: normal;
+}
+
+.video-frame,
+.ascii-frame {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background-color: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.video-frame video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ascii-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #282a36;
+  border: 1px solid #44475a;
+}
+
+.ascii-frame iframe,
+.novnc-container {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.ascii-animation {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #282a36;
+  color: #50fa7b;
+  font-family: 'Courier New', monospace;
+}
+
+.novnc-frame {
+  background-color: #282a36;
+}
+
+/* VideoChat */
+.video-chat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.status-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.status {
+  padding: 8px 12px;
+  border-radius: 20px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.status.listening {
+  background-color: rgba(255, 184, 108, 0.8);
+  color: #000;
+}
+
+.status.speaking {
+  background-color: rgba(80, 250, 123, 0.8);
+  color: #000;
+}
+
+/* Efekty animacji */
+.pulse {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-color: #ff5555;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+}
+
+.wave {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-color: #50fa7b;
+  border-radius: 50%;
+  margin-right: 8px;
+  position: relative;
+}
+
+.wave::before,
+.wave::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-color: #50fa7b;
+  border-radius: 50%;
+  z-index: -1;
+  animation: wave 2s infinite;
+}
+
+.wave::after {
+  animation-delay: 0.3s;
+}
+
+@keyframes wave {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+/* Kontrolki */
+.controls {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.mic-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #bd93f9;
+  color: #282a36;
+  border: none;
+  border-radius: 30px;
+  padding: 12px 30px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.2s;
+  box-shadow: 0 4px 15px rgba(189, 147, 249, 0.4);
+}
+
+.mic-button:hover {
+  background-color: #ff79c6;
+  transform: translateY(-2px);
+}
+
+.mic-button:active {
+  transform: translateY(1px);
+}
+
+.mic-button:disabled {
+  background-color: #6272a4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.mic-icon {
+  font-size: 20px;
+  margin-right: 8px;
+}
+
+/* Wiadomości */
+.message-container {
+  margin: 20px 0;
+  max-height: 150px;
+  overflow-y: auto;
+  background-color: rgba(40, 42, 54, 0.8);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.message {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  max-width: 80%;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message.user {
+  background-color: #6272a4;
+  color: #f8f8f2;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.message.assistant {
+  background-color: #50fa7b;
+  color: #282a36;
+  align-self: flex-start;
+  margin-right: auto;
+}
+
+/* Historia czatu */
+.history-container {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.history-message {
+  display: flex;
+  margin-bottom: 20px;
+}
+
+.history-message .avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #44475a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.history-message .avatar.user {
+  background-color: #6272a4;
+}
+
+.history-message .avatar.assistant {
+  background-color: #50fa7b;
+  color: #282a36;
+}
+
+.history-message .content {
+  background-color: #383a59;
+  padding: 12px 16px;
+  border-radius: 8px;
+  flex: 1;
+}
+
+.history-message.user .content {
+  background-color: #44475a;
+}
+
+.history-message.assistant .content {
+  background-color: #3a4158;
+}
+
+/* Ustawienia */
+.settings-container {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.settings-section {
+  margin-bottom: 30px;
+}
+
+.settings-section h2 {
+  color: #ff79c6;
+  border-bottom: 1px solid #44475a;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
+}
+
+.setting-item {
+  margin-bottom: 16px;
+}
+
+.setting-item label {
+  display: block;
+  margin-bottom: 8px;
+  color: #f8f8f2;
+}
+
+.setting-item input[type="text"],
+.setting-item input[type="number"],
+.setting-item select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #44475a;
+  background-color: #282a36;
+  color: #f8f8f2;
+}
+
+.setting-item button {
+  background-color: #bd93f9;
+  color: #282a36;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.setting-item button:hover {
+  background-color: #ff79c6;
+}

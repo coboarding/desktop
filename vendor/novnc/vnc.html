@@ -1,1 +1,45 @@
-# Strona HTML do wyświetlania ASCII
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASCII Animation</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      background-color: #282a36;
+      color: #50fa7b;
+      font-family: 'Courier New', monospace;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+    
+    #ascii-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      font-size: 14px;
+      white-space: pre;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="ascii-container"></div>
+  
+  <script>
+    // Połączenie WebSocket
+    const socket = new WebSocket(`ws://${window.location.hostname}:${window.location.port}`);
+    const container = document.getElementById('ascii-container');
+    
+    // Obsługa wiadomości
+    socket.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'ascii-frame') {
+          container.textContent

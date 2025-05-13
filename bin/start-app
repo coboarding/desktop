@@ -1,9 +1,26 @@
 #!/bin/bash
-# bin/start-app
+# Główny skrypt uruchomieniowy aplikacji VideoChat LLM
 
 # Ścieżka do katalogu aplikacji
 APP_DIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
 export PATH="$APP_DIR/node_modules/.bin:$PATH"
+
+# Funkcje pomocnicze
+function log() {
+  echo "[$(date +%T)] $1"
+}
+
+# Sprawdź, czy Electron jest zainstalowany
+if ! command -v electron &> /dev/null; then
+  log "Electron nie został znaleziony. Instalowanie..."
+  npm install -g electron
+fi
+
+# Ustaw zmienne środowiskowe
+export USE_K3S="${USE_K3S:-false}"  # Domyślnie wyłączone, można włączyć poprzez USE_K3S=true ./bin/start-app
+
+# Oznajmienie startu
+log "Uruchamianie VideoChat LLM..."
 
 # Uruchom aplikację Electron
 electron "$APP_DIR" "$@"

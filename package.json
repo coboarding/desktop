@@ -1,12 +1,15 @@
 {
   "name": "videochat-llm-app",
   "version": "1.0.0",
-  "description": "Aplikacja VideoChat z LLM, TTS i STT",
+  "description": "Aplikacja VideoChat z LLM, TTS i STT oraz animacją ASCII",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
   },
+  "author": "Your Name",
+  "license": "MIT",
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -16,7 +19,6 @@
     "express": "^4.18.2",
     "socket.io": "^4.7.2",
     "node-vad": "^1.1.4",
-    "node-webrtc": "^0.1.0",
     "whisper-node": "^0.1.5",
     "pico-tts": "^1.0.0",
     "@novnc/novnc": "^1.4.0",
@@ -30,7 +32,10 @@
     "electron": "^28.0.0",
     "electron-builder": "^24.6.4",
     "webpack": "^5.88.0",
-    "babel-loader": "^9.1.3"
+    "babel-loader": "^9.1.3",
+    "@babel/core": "^7.22.5",
+    "@babel/preset-env": "^7.22.5",
+    "@babel/preset-react": "^7.22.5"
   },
   "build": {
     "appId": "com.example.videochat-llm",

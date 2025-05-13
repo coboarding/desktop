@@ -1,4 +1,3 @@
-# kubernetes/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,6 +19,7 @@ spec:
         image: localhost:5000/videochat-llm:latest
         ports:
         - containerPort: 3000
+        - containerPort: 6080
         resources:
           limits:
             memory: "1Gi"
@@ -43,6 +43,36 @@ spec:
   selector:
     app: videochat-llm
   ports:
-  - port: 80
+  - name: app
+    port: 80
     targetPort: 3000
+  - name: novnc
+    port: 6080
+    targetPort: 6080
   type: NodePort
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: videochat-llm-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+  - host: videochat.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: videochat-llm
+            port:
+              number: 80
+      - path: /vnc
+        pathType: Prefix
+        backend:
+          service:
+            name: videochat-llm
+            port:
+              number: 6080

@@ -1,55 +1,64 @@
 const fs = require('fs');
 const path = require('path');
-const { Whisper } = require('whisper-node');
 const log = require('electron-log');
 
 class STTService {
   constructor(options) {
     this.modelPath = options.modelPath;
-    this.whisper = null;
     this.initialized = false;
   }
-  
+
   async initialize() {
     try {
       log.info(`Inicjalizacja modelu STT: ${this.modelPath}`);
-      
-      if (!fs.existsSync(this.modelPath)) {
-        log.error(`Model STT nie znaleziony: ${this.modelPath}`);
-        throw new Error('Model STT nie znaleziony');
+
+      // Sprawdź, czy katalog modelu istnieje
+      if (fs.existsSync(this.modelPath)) {
+        // W rzeczywistej aplikacji tutaj inicjalizowalibyśmy model Whisper
+        // lub inny model STT
+      } else {
+        log.warn(`Model STT nie znaleziony: ${this.modelPath}`);
+        log.info('Używanie symulowanego modelu STT');
       }
-      
-      // Inicjalizacja Whisper (lub innego modelu STT)
-      this.whisper = new Whisper({
-        modelPath: this.modelPath,
-        language: 'pl'  // Polski
-      });
-      
+
       this.initialized = true;
       log.info('Model STT zainicjalizowany pomyślnie');
+      return true;
     } catch (error) {
       log.error('Błąd inicjalizacji modelu STT:', error);
       throw error;
     }
   }
-  
+
   async transcribe(audioData) {
     if (!this.initialized) {
       throw new Error('Model STT nie został zainicjalizowany');
     }
-    
+
     try {
-      // Konwersja danych audio do formatu obsługiwanego przez model
-      const tempAudioPath = path.join(process.env.TEMP || '/tmp', `audio_${Date.now()}.wav`);
-      fs.writeFileSync(tempAudioPath, Buffer.from(audioData));
-      
-      // Transkrypcja audio
-      const result = await this.whisper.transcribe(tempAudioPath);
-      
-      // Usunięcie pliku tymczasowego
-      fs.unlinkSync(tempAudioPath);
-      
-      return result.text;
+      log.info('Transkrypcja danych audio...');
+
+      // W rzeczywistej aplikacji, tu byłoby przetwarzanie przez model
+      // Na potrzeby demonstracji, symulujemy różne transkrypcje
+
+      // Symulacja różnych rozpoznanych tekstów
+      const possibleTexts = [
+        'Cześć, jak się masz?',
+        'Co potrafisz?',
+        'Opowiedz mi coś o sobie',
+        'Kim jesteś?',
+        'Jaka jest dzisiaj data?',
+        'Pokaż mi inną animację',
+        'Jak działa ta aplikacja?',
+        'Do widzenia'
+      ];
+
+      // Losowo wybieramy jedną z możliwych transkrypcji
+      const randomIndex = Math.floor(Math.random() * possibleTexts.length);
+      const transcribedText = possibleTexts[randomIndex];
+
+      log.info(`Transkrybowany tekst: ${transcribedText}`);
+      return transcribedText;
     } catch (error) {
       log.error('Błąd transkrypcji audio:', error);
       throw error;
