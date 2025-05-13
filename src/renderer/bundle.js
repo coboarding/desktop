@@ -293,15 +293,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Pokaż rozpoznany tekst w interfejsie
             addMessage('user', finalTranscript.trim());
             
-            // Wyślij transkrypcję do serwera
+            // Wyślij transkrypcję bezpośrednio do serwera przez Web Speech API
             const transcriptData = {
               transcript: finalTranscript.trim()
             };
             
-            // Konwersja do JSON i wysyłanie
-            const jsonStr = JSON.stringify(transcriptData);
-            const base64data = btoa(jsonStr);
-            socket.emit('audio-data', base64data);
+            // Wysyłanie wyniku rozpoznawania mowy do serwera
+            socket.emit('web-stt-result', transcriptData);
             
             // Wyczyść transkrypcję po wysłaniu
             finalTranscript = '';

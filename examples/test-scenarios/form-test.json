@@ -1,0 +1,43 @@
+{
+  "name": "Form Filling Test",
+  "description": "Test scenario that fills out a form with random data",
+  "stopOnError": true,
+  "screenshotOnComplete": true,
+  "steps": [
+    {
+      "action": "navigate",
+      "url": "https://www.w3schools.com/html/html_forms.asp"
+    },
+    {
+      "action": "wait",
+      "selector": "form",
+      "timeout": 5000
+    },
+    {
+      "action": "fill",
+      "selector": "input[name='firstname']",
+      "value": "Test User"
+    },
+    {
+      "action": "fill",
+      "selector": "input[name='lastname']",
+      "value": "Automation"
+    },
+    {
+      "action": "screenshot",
+      "name": "form-filled"
+    },
+    {
+      "action": "click",
+      "selector": "input[type='submit']"
+    },
+    {
+      "action": "wait",
+      "timeout": 3000
+    },
+    {
+      "action": "screenshot",
+      "name": "form-submitted"
+    }
+  ]
+}

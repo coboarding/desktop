@@ -7,6 +7,7 @@ function App() {
   const [chatHistory, setChatHistory] = useState([]);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [webSpeechActive, setWebSpeechActive] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
   const [rtspConfig, setRtspConfig] = useState(null);
 
@@ -40,6 +41,52 @@ function App() {
     // Nasłuchiwanie na odpowiedzi audio
     socket.current.on('audio-response', (audioData) => {
       playAudioResponse(audioData);
+    });
+
+    // Nasłuchiwanie na web-tts (tekst do odczytania przez przeglądarkę)
+    socket.current.on('web-tts', (data) => {
+      if ('speechSynthesis' in window) {
+        const utter = new window.SpeechSynthesisUtterance(data.text);
+        utter.lang = data.options?.lang || 'pl-PL';
+        utter.volume = data.options?.volume || 1.0;
+        utter.rate = data.options?.rate || 1.0;
+        utter.pitch = data.options?.pitch || 1.0;
+        
+        setIsSpeaking(true);
+        utter.onend = () => setIsSpeaking(false);
+        window.speechSynthesis.speak(utter);
+      }
+    });
+
+    // Nasłuchiwanie na web-stt-request (prośba o użycie Web Speech API do transkrypcji)
+    socket.current.on('web-stt-request', () => {
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'pl-PL';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        
+        setWebSpeechActive(true);
+        
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          // Wysyłamy transkrypcję do serwera
+          socket.current.emit('web-stt-result', {
+            transcript: transcript
+          });
+        };
+        
+        recognition.onend = () => {
+          setWebSpeechActive(false);
+        };
+        
+        recognition.onerror = () => {
+          setWebSpeechActive(false);
+        };
+        
+        recognition.start();
+      }
     });
 
     // Czyszczenie przy odmontowaniu
@@ -108,6 +155,8 @@ function App() {
       if ('speechSynthesis' in window) {
         const utter = new window.SpeechSynthesisUtterance(welcomeMsg);
         utter.lang = 'pl-PL';
+        setIsSpeaking(true);
+        utter.onend = () => setIsSpeaking(false);
         window.speechSynthesis.speak(utter);
       }
     }, 1200);
@@ -152,71 +201,134 @@ function App() {
         }
       }, 5000);
     } catch (error) {
-      console.error('Błąd podczas próby nagrywania audio:', error);
-      setIsListening(false);
-
-      // Symulacja wysłania danych audio w trybie demonstracyjnym
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Symulacja wysłania danych audio...');
-        // Wysyłamy puste dane, backend i tak zwróci symulowaną odpowiedź
-        socket.current.emit('audio-data', new Uint8Array(10));
+      console.error('Błąd podczas uzyskiwania dostępu do mikrofonu:', error);
+      // Fallback do Web Speech API
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        alert('Nie udało się uzyskać dostępu do mikrofonu. Spróbujemy użyć Web Speech API.');
+        startWebSpeechRecognition();
       }
     }
   };
 
-  // Odtwarzanie odpowiedzi audio
-  const playAudioResponse = async (audioData) => {
-    try {
-      const blob = new Blob([audioData], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-
-      audioPlayer.current.src = url;
-      setIsSpeaking(true);
-
-      audioPlayer.current.onended = () => {
-        URL.revokeObjectURL(url);
-        setIsSpeaking(false);
+  // Funkcja do uruchamiania Web Speech API jako fallback
+  const startWebSpeechRecognition = () => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      
+      recognition.lang = 'pl-PL';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      
+      setWebSpeechActive(true);
+      
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        // Wysyłamy transkrypcję do serwera
+        socket.current.emit('web-stt-result', {
+          transcript: transcript
+        });
       };
-
-      await audioPlayer.current.play();
-    } catch (error) {
-      console.error('Błąd odtwarzania audio:', error);
-      setIsSpeaking(false);
-
-      // W przypadku błędu odtwarzania, symulujemy zakończenie mówienia po 2 sekundach
-      setTimeout(() => {
-        setIsSpeaking(false);
-      }, 2000);
+      
+      recognition.onend = () => {
+        setWebSpeechActive(false);
+      };
+      
+      recognition.onerror = () => {
+        setWebSpeechActive(false);
+      };
+      
+      recognition.start();
     }
   };
 
-  // Przekaż konfigurację do ustawień, jeśli użytkownik ustawi przez chat lub GUI
-  const handleRTSPConfig = (config) => {
-    setRtspConfig(config);
-    setChatHistory(prev => [...prev, { type: 'assistant', text: 'Konfiguracja RTSP została zapisana.' }]);
+  // Odtwarzanie odpowiedzi audio
+  const playAudioResponse = (audioData) => {
+    try {
+      setIsSpeaking(true);
+
+      // Konwersja danych binarnych na URL
+      const blob = new Blob([audioData], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+
+      // Ustawienie źródła dla odtwarzacza
+      audioPlayer.current.src = url;
+
+      // Odtwarzanie
+      audioPlayer.current.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(url);
+      };
+
+      audioPlayer.current.play().catch(error => {
+        console.error('Błąd odtwarzania audio:', error);
+        setIsSpeaking(false);
+      });
+    } catch (error) {
+      console.error('Błąd podczas przetwarzania odpowiedzi audio:', error);
+      setIsSpeaking(false);
+    }
+  };
+
+  // Zmiana aktywnej zakładki
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+  };
+
+  // Pobranie ostatniej wiadomości dla VideoChat
+  const getLatestMessage = () => {
+    if (chatHistory.length === 0) return null;
+    return chatHistory[chatHistory.length - 1];
   };
 
   return (
     <div className="app-container">
       <div className="tabs">
-        <button onClick={() => setActiveTab('chat')} className={activeTab === 'chat' ? 'active' : ''}>VideoChat</button>
-        <button onClick={() => setActiveTab('history')} className={activeTab === 'history' ? 'active' : ''}>Historia</button>
-        <button onClick={() => setActiveTab('settings')} className={activeTab === 'settings' ? 'active' : ''}>Ustawienia</button>
+        <button 
+          className={activeTab === 'chat' ? 'active' : ''} 
+          onClick={() => handleTabChange('chat')}
+        >
+          Czat
+        </button>
+        <button 
+          className={activeTab === 'history' ? 'active' : ''} 
+          onClick={() => handleTabChange('history')}
+        >
+          Historia
+        </button>
+        <button 
+          className={activeTab === 'settings' ? 'active' : ''} 
+          onClick={() => handleTabChange('settings')}
+        >
+          Ustawienia
+        </button>
       </div>
-      {activeTab === 'chat' && (
-        <VideoChat
-          isListening={isListening}
-          isSpeaking={isSpeaking}
-          onStartListening={startListening}
-          latestMessage={chatHistory[chatHistory.length - 1]}
-        />
-      )}
-      {activeTab === 'history' && (
-        <ChatHistory messages={chatHistory} />
-      )}
-      {activeTab === 'settings' && (
-        <Settings rtspConfig={rtspConfig} onRTSPConfigChange={handleRTSPConfig} />
-      )}
+      
+      <div className="tab-content">
+        {activeTab === 'chat' && (
+          <VideoChat 
+            isListening={isListening} 
+            isSpeaking={isSpeaking}
+            webSpeechActive={webSpeechActive}
+            onStartListening={startListening}
+            onStartWebSpeech={startWebSpeechRecognition}
+            latestMessage={getLatestMessage()}
+          />
+        )}
+        
+        {activeTab === 'history' && (
+          <ChatHistory 
+            messages={chatHistory}
+          />
+        )}
+        
+        {activeTab === 'settings' && (
+          <Settings 
+            rtspConfig={rtspConfig}
+            setRtspConfig={setRtspConfig}
+          />
+        )}
+      </div>
     </div>
   );
 }

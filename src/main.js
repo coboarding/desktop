@@ -128,7 +128,17 @@ const setupExpressServer = () => {
     // Obsługa danych audio do STT
     socket.on('audio-data', async (audioData) => {
       try {
-        const text = await sttService.transcribe(audioData);
+        const result = await sttService.transcribe(audioData);
+        
+        // Sprawdź, czy wynik to obiekt z typem web-stt-request
+        if (result && result.type === 'web-stt-request') {
+          // Wyślij prośbę do przeglądarki o użycie Web Speech API
+          socket.emit('web-stt-request');
+          return;
+        }
+        
+        const text = result; // Jeśli nie jest to obiekt, to jest to tekst
+        
         if (text && text.trim()) {
           log.info(`Rozpoznany tekst: "${text}"`);
           
@@ -158,10 +168,17 @@ const setupExpressServer = () => {
 
           // Generowanie odpowiedzi głosowej
           const audioResponse = await ttsService.synthesize(response);
-          socket.emit('audio-response', audioResponse);
+          
+          // Sprawdź, czy odpowiedź to obiekt z typem web-tts
+          if (audioResponse && audioResponse.type === 'web-tts') {
+            // Wyślij tekst do przeglądarki do odczytania przez Web Speech API
+            socket.emit('web-tts', audioResponse);
+          } else {
+            // Wyślij binarną odpowiedź audio (stary sposób)
+            socket.emit('audio-response', audioResponse);
+          }
 
           // Powrót do stanu "listening" po zakończeniu mówienia
-          // aby pokazać, że system jest gotowy na kolejne wypowiedzi
           setTimeout(() => {
             if (novncServer) {
               novncServer.setAnimation('listening');
@@ -174,6 +191,62 @@ const setupExpressServer = () => {
       }
     });
     
+    // Obsługa wyników Web Speech API z przeglądarki
+    socket.on('web-stt-result', async (data) => {
+      try {
+        if (data && data.transcript) {
+          const text = data.transcript;
+          log.info(`Rozpoznany tekst z Web Speech API: "${text}"`);
+          
+          // Zmiana stanu animacji na "listening" podczas rozpoznawania mowy
+          if (novncServer) {
+            novncServer.setAnimation('listening');
+          }
+          
+          // Informuj użytkownika, że jego wypowiedź została rozpoznana
+          socket.emit('transcription', { user: text });
+          
+          // Zmiana stanu animacji na "thinking" podczas przetwarzania
+          if (novncServer) {
+            novncServer.setAnimation('thinking');
+          }
+
+          // Przetwarzanie przez LLM
+          const response = await llmService.process(text);
+          
+          // Wysłanie odpowiedzi tekstowej
+          socket.emit('transcription', { assistant: response });
+          
+          // Zmiana stanu animacji na "talking"
+          if (novncServer) {
+            novncServer.setAnimation('talking');
+          }
+
+          // Generowanie odpowiedzi głosowej
+          const audioResponse = await ttsService.synthesize(response);
+          
+          // Sprawdź, czy odpowiedź to obiekt z typem web-tts
+          if (audioResponse && audioResponse.type === 'web-tts') {
+            // Wyślij tekst do przeglądarki do odczytania przez Web Speech API
+            socket.emit('web-tts', audioResponse);
+          } else {
+            // Wyślij binarną odpowiedź audio (stary sposób)
+            socket.emit('audio-response', audioResponse);
+          }
+
+          // Powrót do stanu "listening" po zakończeniu mówienia
+          setTimeout(() => {
+            if (novncServer) {
+              novncServer.setAnimation('listening');
+            }
+          }, 1000);
+        }
+      } catch (error) {
+        log.error('Błąd przetwarzania tekstu z Web Speech API:', error);
+        socket.emit('error', { message: 'Wystąpił błąd podczas przetwarzania tekstu' });
+      }
+    });
+    
     // Auto-start konwersacji po połączeniu
     setTimeout(async () => {
       const welcomeMessage = "Witaj w aplikacji VideoChat! Mikrofon został automatycznie włączony, możesz od razu zacząć mówić. Jak mogę Ci dziś pomóc?";
@@ -183,13 +256,22 @@ const setupExpressServer = () => {
         novncServer.setAnimation('talking');
       }
 
+      // Wysłanie wiadomości powitalnej
       socket.emit('transcription', { assistant: welcomeMessage });
+
+      // Generowanie odpowiedzi głosowej
+      const audioResponse = await ttsService.synthesize(welcomeMessage);
       
-      const welcomeAudio = await ttsService.synthesize(welcomeMessage);
-      socket.emit('audio-response', welcomeAudio);
+      // Sprawdź, czy odpowiedź to obiekt z typem web-tts
+      if (audioResponse && audioResponse.type === 'web-tts') {
+        // Wyślij tekst do przeglądarki do odczytania przez Web Speech API
+        socket.emit('web-tts', audioResponse);
+      } else {
+        // Wyślij binarną odpowiedź audio (stary sposób)
+        socket.emit('audio-response', audioResponse);
+      }
 
       // Powrót do stanu "listening" po zakończeniu mówienia
-      // aby pokazać, że system jest gotowy na słuchanie
       setTimeout(() => {
         if (novncServer) {
           novncServer.setAnimation('listening');

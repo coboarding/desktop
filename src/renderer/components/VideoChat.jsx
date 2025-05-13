@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import AsciiAnimation from './AsciiAnimation';
 
-function VideoChat({ isListening, isSpeaking, onStartListening, latestMessage }) {
+function VideoChat({ isListening, isSpeaking, webSpeechActive, onStartListening, onStartWebSpeech, latestMessage }) {
   const [botState, setBotState] = useState('idle');
   const videoRef = useRef(null);
 
@@ -33,31 +33,38 @@ function VideoChat({ isListening, isSpeaking, onStartListening, latestMessage })
     };
   }, []);
 
-  // Aktualizacja stanu bota na podstawie isListening i isSpeaking
+  // Aktualizacja stanu bota na podstawie isListening, isSpeaking i webSpeechActive
   useEffect(() => {
-    if (isListening) {
+    if (isListening || webSpeechActive) {
       setBotState('listening');
     } else if (isSpeaking) {
       setBotState('talking');
     } else {
       setBotState('idle');
     }
-  }, [isListening, isSpeaking]);
+  }, [isListening, isSpeaking, webSpeechActive]);
 
   // Automatyczne rozpoczęcie konwersacji
   useEffect(() => {
     // Opóźnienie, aby dać czas na ładowanie
     const timer = setTimeout(() => {
-      if (!isListening && !isSpeaking) {
+      if (!isListening && !isSpeaking && !webSpeechActive) {
         // Automatyczne rozpoczęcie nasłuchiwania po otrzymaniu odpowiedzi od asystenta
         if (latestMessage && latestMessage.type === 'assistant') {
-          setTimeout(onStartListening, 1000);
+          setTimeout(() => {
+            // Preferuj Web Speech API, jeśli jest dostępne
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+              onStartWebSpeech();
+            } else {
+              onStartListening();
+            }
+          }, 1000);
         }
       }
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [isListening, isSpeaking, latestMessage, onStartListening]);
+  }, [isListening, isSpeaking, webSpeechActive, latestMessage, onStartListening, onStartWebSpeech]);
 
   return (
     <div className="video-chat-container">
@@ -99,12 +106,18 @@ function VideoChat({ isListening, isSpeaking, onStartListening, latestMessage })
       <div className="controls">
         <button 
           className="mic-button"
-          onClick={onStartListening}
-          disabled={isListening || isSpeaking}
+          onClick={onStartWebSpeech || onStartListening}
+          disabled={isListening || isSpeaking || webSpeechActive}
         >
           <span className="mic-icon">🎤</span>
-          {isListening ? 'Słucham...' : 'Naciśnij, aby mówić'}
+          {isListening || webSpeechActive ? 'Słucham...' : 'Naciśnij, aby mówić'}
+          {(isListening || webSpeechActive) && <div className="listening-indicator"></div>}
         </button>
+        <div className="speech-status">
+          {webSpeechActive && <span className="web-speech-badge">Web Speech API</span>}
+          {isListening && !webSpeechActive && <span className="web-speech-badge">Mikrofon</span>}
+          {isSpeaking && <span className="web-speech-badge speaking">Mówię...</span>}
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,7 @@
 models
 vendor
+videos
+
 node_modules
 yarn-error.log
 package-lock.json
