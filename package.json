@@ -5,8 +5,16 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "postinstall": "echo 'Skipping postinstall to avoid native module compilation'"
+    "build": "node build.js",
+    "build:electron": "electron-builder",
+    "build:webpack": "webpack --mode production",
+    "postinstall": "echo 'Skipping postinstall to avoid native module compilation'",
+    "webpack:dev": "webpack --mode development",
+    "webpack:watch": "webpack --mode development --watch",
+    "dev": "webpack serve --mode development",
+    "clean": "rm -rf dist",
+    "test": "node run-tests.js",
+    "test:watch": "jest --watch"
   },
   "author": "Your Name",
   "license": "MIT",
@@ -28,11 +36,17 @@
     "@babel/preset-env": "^7.27.2",
     "@babel/preset-react": "^7.27.1",
     "babel-loader": "^10.0.0",
+    "copy-webpack-plugin": "^12.0.2",
+    "css-loader": "^7.0.0",
     "electron": "^36.2.0",
     "electron-builder": "^26.0.12",
+    "html-webpack-plugin": "^5.6.0",
     "jest": "^29.7.0",
     "jsonlint": "^1.6.3",
-    "webpack": "^5.99.8"
+    "style-loader": "^4.0.0",
+    "webpack": "^5.99.8",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.0.2"
   },
   "build": {
     "appId": "com.example.videochat-llm",

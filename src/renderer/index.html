@@ -12,7 +12,11 @@
   <!-- Skrypty Socket.io -->
   <script src="/socket.io/socket.io.js"></script>
 
-  <!-- Skrypty React - w rzeczywistej aplikacji byłyby to pliki wygenerowane przez webpack -->
+  <!-- Skrypt główny aplikacji (używa modułów ES6) -->
+  <script type="module" src="modules/app.js"></script>
+  
+  <!-- Tymczasowo zachowujemy bundle.js dla kompatybilności wstecznej -->
+  <!-- Ten skrypt zostanie usunięty po pełnej migracji do modułów -->
   <script src="bundle.js"></script>
 </body>
 </html>

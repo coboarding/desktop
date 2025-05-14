@@ -99,10 +99,57 @@ Aplikacja składa się z następujących komponentów:
    Skrypt uruchamia testy jednostkowe (Jest), E2E (jeśli dostępne), waliduje pliki YAML i JSON.
 
 2. **Walidacja konfiguracji:**
-   - YAML: `yamllint kubernetes/ terraform/ ansible/`
-   - JSON: `jsonlint models/**/*.json --quiet`
+   ```sh
+   npm run validate
+   ```
+   Sprawdza poprawność plików konfiguracyjnych.
 
 ## Struktura projektu i dokumentacja
+
+Projekt jest zorganizowany w następujący sposób:
+
+```
+/
+├── bin/                  # Skrypty pomocnicze
+├── dist/                 # Skompilowana aplikacja (generowana przez webpack)
+├── docs/                 # Dokumentacja
+├── models/               # Modele AI (LLM, STT, TTS)
+├── src/                  # Kod źródłowy
+│   ├── infrastructure/   # Zarządzanie infrastrukturą (K3s, Terraform, Ansible)
+│   ├── renderer/         # Kod interfejsu użytkownika
+│   │   ├── modules/      # Moduły JavaScript (zrefaktoryzowany kod)
+│   │   │   ├── app.js            # Główny plik aplikacji
+│   │   │   ├── htmlStructure.js  # Struktura HTML
+│   │   │   ├── socketHandlers.js # Obsługa komunikacji przez socket.io
+│   │   │   ├── speechRecognition.js # Rozpoznawanie mowy
+│   │   │   ├── speechSynthesis.js # Synteza mowy
+│   │   │   └── uiComponents.js   # Komponenty interfejsu użytkownika
+│   │   ├── components/    # Komponenty React
+│   │   ├── bundle.js      # Skompilowany kod (przestarzały, do usunięcia)
+│   │   ├── index.html     # Główny plik HTML
+│   │   └── styles.css     # Style CSS
+│   └── services/         # Serwisy (LLM, STT, TTS, ASCII)
+└── tests/                # Testy
+```
+
+### System budowania
+
+Projekt używa następujących narzędzi do budowania:
+
+- **Webpack** - do budowania frontendu
+- **Babel** - do transpilacji kodu JavaScript
+- **Electron Builder** - do pakowania aplikacji desktopowej
+
+### Skrypty npm
+
+- `npm start` - uruchamia aplikację w trybie deweloperskim
+- `npm run build` - buduje całą aplikację (frontend i aplikację desktopową)
+- `npm run build:webpack` - buduje tylko frontend
+- `npm run build:electron` - buduje tylko aplikację desktopową
+- `npm run webpack:dev` - buduje frontend w trybie deweloperskim
+- `npm run webpack:watch` - buduje frontend w trybie deweloperskim z automatycznym odświeżaniem
+- `npm run dev` - uruchamia serwer deweloperski dla frontendu
+- `npm run clean` - usuwa katalog dist
 
 - Szczegółowa dokumentacja znajduje się w katalogu `./docs/`
 - Struktura katalogów i kluczowe pliki opisane są w `docs/2.md`
@@ -215,4 +262,4 @@ Tworzy to pakiety dla systemu Linux w formatach:
 
 ## Licencja
 
-Ten projekt jest udostępniany na licencji MIT.
+Ten projekt jest udostępniany na licencji [LICENSE](LICENSE).
